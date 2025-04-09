@@ -51,6 +51,8 @@ class WordTokenizer:
 
             # Define punctuation to remove (keeping only , and .)
             punctuation = set('!"#$%&\'()*+-/:;<=>?@[\\]^_`{|}~"')
+            # Add empty string to punctuation to prevent it from being included
+            punctuation.add("")
 
             # Add most common words to vocabulary, excluding punctuation
             for word, count in word_counts.most_common(max_vocab_size - 4):
@@ -236,9 +238,7 @@ def sample_next_token(probs, sampling_strategy, top_k=5, top_p=0.8):
             -1, top_k_indices, top_k_values
         )
         # Renormalize
-        filtered_probs = filtered_probs / filtered_probs.sum(
-            dim=-1, keepdim=True
-        )
+        filtered_probs = filtered_probs / filtered_probs.sum(dim=-1, keepdim=True)
         # Sample from the filtered distribution
         return torch.multinomial(filtered_probs, num_samples=1)
     elif sampling_strategy == "top-p":
@@ -249,9 +249,7 @@ def sample_next_token(probs, sampling_strategy, top_k=5, top_p=0.8):
         # Remove tokens with cumulative probability above the threshold
         sorted_indices_to_remove = cumulative_probs > top_p
         # Shift the indices to the right to keep also the first token above the threshold
-        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[
-            ..., :-1
-        ].clone()
+        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
         sorted_indices_to_remove[..., 0] = 0
         # Create a mask for the tokens to keep
         indices_to_remove = sorted_indices_to_remove.scatter(
@@ -261,14 +259,13 @@ def sample_next_token(probs, sampling_strategy, top_k=5, top_p=0.8):
         filtered_probs = probs.clone()
         filtered_probs[indices_to_remove] = 0
         # Renormalize
-        filtered_probs = filtered_probs / filtered_probs.sum(
-            dim=-1, keepdim=True
-        )
+        filtered_probs = filtered_probs / filtered_probs.sum(dim=-1, keepdim=True)
         # Sample from the filtered distribution
         return torch.multinomial(filtered_probs, num_samples=1)
     else:
         raise ValueError(f"Invalid sampling strategy: {sampling_strategy}")
-    
+
+
 def generate_text(
     model,
     tokenizer,
@@ -391,7 +388,7 @@ def main():
 
     # training
     cfg.batch_size = 128
-    cfg.num_epochs = 1
+    cfg.num_epochs = 4
     cfg.learning_rate = 0.001
     cfg.weight_decay = 0.0001
     cfg.loss_fn = "CrossEntropyLoss"  # "CrossEntropyLoss", "NLL"
