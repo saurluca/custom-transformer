@@ -15,27 +15,28 @@ class InputEmbeddings(nn.Module):
 
     def forward(self, x):
         # Return the embeddings multiplied by the square root of d_model
-        return self.embedding(x)* math.sqrt(self.d_model)
+        return self.embedding(x) * math.sqrt(self.d_model)
 
 
-    
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_seq_length):
         super().__init__()
         # Create a matrix of zeros of dimensions max_seq_length by d_model
         pe = torch.zeros(max_seq_length, d_model)
         position = torch.arange(0, max_seq_length, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
-        
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model)
+        )
+
         # Perform the sine and cosine calculations
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         # Ensure pe isn't a learnable parameter during training
-        self.register_buffer('pe', pe.unsqueeze(0))
-        
+        self.register_buffer("pe", pe.unsqueeze(0))
+
     def forward(self, x):
         # Add the positional embeddings to the token embeddings
-        return x + self.pe[:, :x.size(1)]
+        return x + self.pe[:, : x.size(1)]
 
 
 class MultiHeadAttention(nn.Module):
@@ -58,9 +59,9 @@ class MultiHeadAttention(nn.Module):
 
     def compute_attention(self, query, key, value, mask=None):
         # Compute scaled dot-product attention
-        scores = torch.matmul(query, key.transpose(-2, -1)) / (self.head_dim ** 0.5)
+        scores = torch.matmul(query, key.transpose(-2, -1)) / (self.head_dim**0.5)
         if mask is not None:
-            scores = scores.masked_fill(mask == 0, float('-inf'))
+            scores = scores.masked_fill(mask == 0, float("-inf"))
         attention_weights = F.softmax(scores, dim=-1)
         return torch.matmul(attention_weights, value)
 
@@ -76,10 +77,11 @@ class MultiHeadAttention(nn.Module):
         query = self.split_heads(self.query_linear(query), batch_size)
         key = self.split_heads(self.key_linear(key), batch_size)
         value = self.split_heads(self.value_linear(value), batch_size)
-        
+
         attention_weights = self.compute_attention(query, key, value, mask)
         output = self.combine_heads(attention_weights, batch_size)
         return self.output_linear(output)
+
 
 class FeedForwardSubLayer(nn.Module):
     def __init__(self, d_model, d_ff):
@@ -92,58 +94,56 @@ class FeedForwardSubLayer(nn.Module):
     def forward(self, x):
         # Pass the input through the layers and activation
         return self.fc2(self.relu(self.fc1(x)))
-    
-class EncoderLayer(nn.Module):
+
+
+class DecoderLayer(nn.Module):
     def __init__(self, d_model, num_heads, d_ff, dropout):
         super().__init__()
-        # Instantiate the layers
         self.self_attn = MultiHeadAttention(d_model, num_heads)
         self.ff_sublayer = FeedForwardSubLayer(d_model, d_ff)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, src_mask):
-        # Complete the forward method
-        attn_output = self.self_attn(x, x, x, src_mask)
+    def forward(self, x, tgt_mask):
+        # Perform the attention calculation
+        attn_output = self.self_attn(x, x, x, tgt_mask)
+        # Apply dropout and the first layer normalization
         x = self.norm1(x + self.dropout(attn_output))
+        # Pass through the feed-forward sublayer
         ff_output = self.ff_sublayer(x)
+        # Apply dropout and the second layer normalization
         x = self.norm2(x + self.dropout(ff_output))
         return x
-    
 
-class TransformerEncoder(nn.Module):
-    def __init__(self, vocab_size, d_model, num_layers, num_heads, d_ff, dropout, max_seq_length):
-        super().__init__()
-        # Define the embedding, positional encoding, and encoder layers
+
+class TransformerDecoder(nn.Module):
+    def __init__(
+        self, vocab_size, d_model, num_layers, num_heads, d_ff, dropout, max_seq_length
+    ):
+        super(TransformerDecoder, self).__init__()
         self.embedding = InputEmbeddings(vocab_size, d_model)
         self.positional_encoding = PositionalEncoding(d_model, max_seq_length)
-        self.layers = nn.ModuleList([EncoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
+        # Define the list of decoder layers and linear layer
+        self.layers = nn.ModuleList(
+            [DecoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)]
+        )
+        # Define a linear layer to project hidden states to likelihoods
+        self.fc = nn.Linear(d_model, vocab_size)
 
-    def forward(self, x, src_mask):
-        # Perform the forward pass through the layers
+    def forward(self, x, tgt_mask):
+        # Complete the forward pass
         x = self.embedding(x)
         x = self.positional_encoding(x)
         for layer in self.layers:
-            x = layer(x, src_mask)
-        return x
+            x = layer(x, tgt_mask)
+        x = self.fc(x)
+        return F.log_softmax(x, dim=-1)
 
-
-# Complete the classification head
-class ClassifierHead(nn.Module):
-    def __init__(self, d_model, num_classes):
-        super().__init__()
-        self.fc = nn.Linear(d_model, num_classes)
-
-    def forward(self, x):
-        logits = self.fc(x)
-        return F.log_softmax(logits, dim=-1)
-    
-    
 
 def main():
     print("Starting transformation ...")
-    
+
     vocab_size = 10000
     d_model = 512
     num_layers = 6
@@ -151,24 +151,23 @@ def main():
     d_ff = 2048
     dropout = 0.1
     seq_length = 256
-    num_classes = 3
-    batch_size = 2
 
-    input_sequence=torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]])
-    src_mask=torch.tensor([[1, 1, 1, 1], [1, 1, 1, 1]])
-    
-    
-    # Instantiate the encoder transformer's body and head
-    encoder = TransformerEncoder(vocab_size, d_model, num_layers, num_heads, d_ff, dropout, seq_length)
-    classifier = ClassifierHead(d_model, num_classes)
+    print("Decoder")
+    input_tokens = torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]])
+    max_seq_length = 4
 
-    # Complete the forward pass 
-    output = encoder(input_sequence, src_mask)
-    classification = classifier(output)
-    print(f"Classification outputs for a batch of {batch_size} sequences:\n{classification}")
-    print(f"Encoder output shape: {output.shape}\nClassification head output shape: {classification.shape}")
+    # Create a Boolean matrix to mask future tokens
+    tgt_mask = (
+        1 - torch.triu(torch.ones(1, seq_length, seq_length), diagonal=1)
+    ).bool()
 
-
+    # Instantiate a decoder transformer and apply it to input_tokens and tgt_mask
+    transformer_decoder = TransformerDecoder(
+        vocab_size, d_model, num_layers, num_heads, d_ff, dropout, max_seq_length
+    )
+    output = transformer_decoder(input_tokens, tgt_mask)
+    print(output)
+    print(output.shape)
 
 
 if __name__ == "__main__":
