@@ -10,5 +10,5 @@ wheels/
 .venv
 
 # custom
-plots/
-models/
+plots/*
+models/*
