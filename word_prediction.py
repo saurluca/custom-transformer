@@ -10,6 +10,7 @@ from transformer import TransformerDecoder
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
+from tokenizers import Tokenizer
 
 # Download necessary NLTK data
 print("Downloading NLTK data...")
@@ -20,31 +21,58 @@ nltk.download("averaged_perceptron_tagger")
 
 
 class WordTokenizer:
-    def __init__(self, texts, min_freq=2, max_vocab_size=10000):
-        # Count word frequencies
-        word_counts = Counter()
-        for text in texts:
-            word_counts.update(word_tokenize(text.lower()))
+    def __init__(
+        self,
+        texts,
+        min_freq=2,
+        max_vocab_size=10000,
+        use_pretrained=False,
+        pretrained_model="bert-base-uncased",
+    ):
+        self.use_pretrained = use_pretrained
 
-        # Create vocabulary with special tokens
-        self.vocab = {"<pad>": 0, "<unk>": 1, "<s>": 2, "</s>": 3}
+        if use_pretrained:
+            # Use a pretrained tokenizer
+            self.tokenizer = Tokenizer.from_pretrained(pretrained_model)
+            # Create vocabulary mappings from pretrained tokenizer
+            self.vocab = {
+                token: idx for token, idx in self.tokenizer.get_vocab().items()
+            }
+            self.idx2word = {idx: token for token, idx in self.vocab.items()}
+        else:
+            # Original word-level tokenization
+            word_counts = Counter()
+            for text in texts:
+                word_counts.update(word_tokenize(text.lower()))
 
-        # Add most common words to vocabulary
-        for word, count in word_counts.most_common(max_vocab_size - 4):
-            if count >= min_freq:
-                self.vocab[word] = len(self.vocab)
+            # Create vocabulary with special tokens
+            self.vocab = {"<pad>": 0, "<unk>": 1, "<s>": 2, "</s>": 3}
 
-        # Create reverse mapping
-        self.idx2word = {idx: word for word, idx in self.vocab.items()}
+            # Define punctuation to remove (keeping only , and .)
+            punctuation = set('!"#$%&\'()*+-/:;<=>?@[\\]^_`{|}~"')
+
+            # Add most common words to vocabulary, excluding punctuation
+            for word, count in word_counts.most_common(max_vocab_size - 4):
+                if count >= min_freq and word not in punctuation:
+                    self.vocab[word] = len(self.vocab)
+
+            # Create reverse mapping
+            self.idx2word = {idx: word for word, idx in self.vocab.items()}
 
     def encode(self, text):
         """Convert text to token indices"""
-        tokens = word_tokenize(text.lower())
-        return [self.vocab.get(token, self.vocab["<unk>"]) for token in tokens]
+        if self.use_pretrained:
+            return self.tokenizer.encode(text).ids
+        else:
+            tokens = word_tokenize(text.lower())
+            return [self.vocab.get(token, self.vocab["<unk>"]) for token in tokens]
 
     def decode(self, indices):
         """Convert token indices back to text"""
-        return " ".join([self.idx2word.get(idx, "<unk>") for idx in indices])
+        if self.use_pretrained:
+            return self.tokenizer.decode(indices)
+        else:
+            return " ".join([self.idx2word.get(idx, "<unk>") for idx in indices])
 
     def __len__(self):
         return len(self.vocab)
@@ -175,11 +203,20 @@ def generate_text(
             tokens = torch.cat([tokens, next_token], dim=1)
 
             # Stop if we predict the end token or reach max sequence length
-            if (
-                next_token.item() == tokenizer.vocab["</s>"]
-                or tokens.size(1) >= seq_length
-            ):
-                break
+            if tokenizer.use_pretrained:
+                # For BERT tokenizer, check for [SEP] token
+                if (
+                    next_token.item() == tokenizer.vocab["[SEP]"]
+                    or tokens.size(1) >= seq_length
+                ):
+                    break
+            else:
+                # For custom tokenizer, check for </s> token
+                if (
+                    next_token.item() == tokenizer.vocab["</s>"]
+                    or tokens.size(1) >= seq_length
+                ):
+                    break
 
     return tokenizer.decode(tokens[0].tolist())
 
@@ -213,7 +250,7 @@ def main():
     cfg.batch_size = 128
     cfg.num_epochs = 3
     cfg.learning_rate = 0.001
-    cfg.loss_fn = "NLL"  # "CrossEntropyLoss", "NLL"
+    cfg.loss_fn = "CrossEntropyLoss"  # "CrossEntropyLoss", "NLL"
 
     # model
     cfg.d_model = 256
@@ -221,15 +258,17 @@ def main():
     cfg.num_heads = 4
     cfg.d_ff = 1024
     cfg.dropout = 0.1
-    cfg.seq_length = 10
+    cfg.max_seq_length = 20
     cfg.max_length = 15
 
     # data
-    cfg.num_samples = 10000
+    cfg.num_samples = 1000
     cfg.min_vocab_freq = 2
     cfg.max_vocab_size = 10000
     cfg.seq_length = 10
     cfg.train_size = 0.9
+    cfg.use_pretrained = False
+    cfg.pretrained_model = "bert-base-uncased"
 
     # Load a small dataset from NLTK Gutenberg
     print("Loading dataset...")
@@ -243,10 +282,16 @@ def main():
     # Initialize tokenizer with larger vocabulary and lower frequency threshold
     print("Initializing tokenizer...")
     tokenizer = WordTokenizer(
-        texts, min_freq=cfg.min_vocab_freq, max_vocab_size=cfg.max_vocab_size
+        texts,
+        min_freq=cfg.min_vocab_freq,
+        max_vocab_size=cfg.max_vocab_size,
+        use_pretrained=cfg.use_pretrained,
+        pretrained_model=cfg.pretrained_model,
     )
     vocab_size = len(tokenizer)
     print(f"Vocabulary size: {vocab_size}")
+    # print the first 10 words
+    print(list(tokenizer.vocab.keys())[:10])
 
     # Prepare sequences
     print("Preparing sequences...")
@@ -275,7 +320,7 @@ def main():
         num_heads=cfg.num_heads,
         d_ff=cfg.d_ff,
         dropout=cfg.dropout,
-        max_seq_length=cfg.seq_length,
+        max_seq_length=cfg.max_seq_length,
     ).to(device)
 
     # Loss and optimizer
@@ -301,19 +346,7 @@ def main():
         print(f"Test Loss: {test_loss:.4f}")
 
         # Generate some sample text
-        prompts = ["we should go and ", "her mother had", "she was the", "it has been"]
-
-        """
-        She was the youngest of the two daughters of a most affectionate,
-        indulgent father; and had, in consequence of her sister's marriage,
-        been mistress of his house from a very early period
-
-        Her mother
-        had died too long ago for her to have more than an indistinct
-        remembrance of her caresses; and her place had been supplied
-        by an excellent woman as governess, who had fallen little short
-        of a mother in affection
-        """
+        prompts = ["the quick brown ", "her mother had", "she was the", "I love "]
 
         print("\nGenerating samples:")
         for prompt in prompts:
@@ -338,6 +371,9 @@ def main():
     plot_loss(train_losses, test_losses)
 
     print("Training completed!")
+
+    # save model
+    torch.save(model.state_dict(), "models/model.pth")
 
 
 if __name__ == "__main__":
