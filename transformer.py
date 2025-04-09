@@ -139,36 +139,3 @@ class TransformerDecoder(nn.Module):
             x = layer(x, tgt_mask)
         x = self.fc(x)
         return F.log_softmax(x, dim=-1)
-
-
-def main():
-    print("Starting transformation ...")
-
-    vocab_size = 10000
-    d_model = 512
-    num_layers = 6
-    num_heads = 8
-    d_ff = 2048
-    dropout = 0.1
-    seq_length = 256
-
-    print("Decoder")
-    input_tokens = torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]])
-    max_seq_length = 4
-
-    # Create a Boolean matrix to mask future tokens
-    tgt_mask = (
-        1 - torch.triu(torch.ones(1, seq_length, seq_length), diagonal=1)
-    ).bool()
-
-    # Instantiate a decoder transformer and apply it to input_tokens and tgt_mask
-    transformer_decoder = TransformerDecoder(
-        vocab_size, d_model, num_layers, num_heads, d_ff, dropout, max_seq_length
-    )
-    output = transformer_decoder(input_tokens, tgt_mask)
-    print(output)
-    print(output.shape)
-
-
-if __name__ == "__main__":
-    main()
