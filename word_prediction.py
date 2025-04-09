@@ -51,8 +51,10 @@ class WordTokenizer:
 
             # Define punctuation to remove (keeping only , and .)
             punctuation = set('!"#$%&\'()*+-/:;<=>?@[\\]^_`{|}~"')
-            # Add empty string to punctuation to prevent it from being included
-            punctuation.add("")
+            punctuation.add("--")
+            punctuation.add("''")
+            punctuation.add("``")
+            punctuation.add('""')
 
             # Add most common words to vocabulary, excluding punctuation
             for word, count in word_counts.most_common(max_vocab_size - 4):
@@ -216,6 +218,7 @@ def train_model(
                 top_k=cfg.top_k,
                 top_p=cfg.top_p,
                 sampling_strategy=cfg.sampling_strategy,
+                show_top_k=cfg.show_top_k,
             )
             print(f"Prompt: {prompt}")
             print(f"Decoded input: {tokenizer.decode(input_tokens)}")
@@ -274,7 +277,7 @@ def generate_text(
     temperature=0.7,
     device="cpu",
     seq_length=10,
-    show_top_k=True,
+    show_top_k=False,
     top_k=5,
     top_p=0.8,
     sampling_strategy="multinomial",
@@ -378,10 +381,10 @@ def main():
 
     # data
     cfg.dataset = "austen-emma.txt"
-    cfg.num_samples = 1000
+    cfg.num_samples = 10000
     cfg.min_vocab_freq = 2
     cfg.max_vocab_size = 10000
-    cfg.seq_length = 10
+    cfg.seq_length = 15
     cfg.train_size = 0.9
     cfg.use_pretrained = False
     cfg.pretrained_model = "bert-base-uncased"
@@ -389,27 +392,29 @@ def main():
     # training
     cfg.batch_size = 128
     cfg.num_epochs = 4
-    cfg.learning_rate = 0.001
+    cfg.num_workers = 2
+    cfg.learning_rate = 0.0001
     cfg.weight_decay = 0.0001
     cfg.loss_fn = "CrossEntropyLoss"  # "CrossEntropyLoss", "NLL"
 
     # model
     cfg.d_model = 256
-    cfg.num_layers = 4
-    cfg.num_heads = 4
-    cfg.d_ff = 1024
+    cfg.num_layers = 8
+    cfg.num_heads = 8 
+    cfg.d_ff = 1024  # recommended: 4x d_model
     cfg.dropout = 0.1
     cfg.max_seq_length = 20
     cfg.max_length = 15
 
     # text generation
     cfg.max_length_gen = 15  # max length of generated text
-    cfg.seq_length_gen = 10  # sequence length for generation
+    cfg.seq_length_gen = 15  # sequence length for generation
     cfg.temperature = 0.7
-    cfg.top_k = 5
+    cfg.top_k = 8
     cfg.top_p = 0.5
     cfg.sampling_strategy = "top-k"  # "multinomial", "greedy", "top-k", "top-p"
-    cfg.example_prompts = ["the man who", "her mother had", "she was the", "I love "]
+    cfg.example_prompts = ["The man who ...", "her mother had", "she was the", "I love "]
+    cfg.show_top_k = False
 
     # Load a small dataset from NLTK Gutenberg
     print("Loading dataset...")
@@ -444,8 +449,11 @@ def main():
         train_sequences,
         batch_size=cfg.batch_size,
         shuffle=True,
+        num_workers=cfg.num_workers,
     )
-    test_loader = torch.utils.data.DataLoader(test_sequences, batch_size=cfg.batch_size)
+    test_loader = torch.utils.data.DataLoader(
+        test_sequences, batch_size=cfg.batch_size, num_workers=cfg.num_workers
+    )
 
     # Initialize model
     print("Initializing model...")
@@ -461,6 +469,9 @@ def main():
         dropout=cfg.dropout,
         max_seq_length=cfg.max_seq_length,
     ).to(device)
+
+    # print model parameters number
+    print(f"Model parameters number: {sum(p.numel() for p in model.parameters())}")
 
     # Loss and optimizer
     criterion = init_loss_fn(cfg.loss_fn)
