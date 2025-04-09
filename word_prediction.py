@@ -195,6 +195,13 @@ def generate_text(
             output = model(tokens, mask)
             next_token_logits = output[:, -1, :] / temperature
 
+            # Set probability of <unk> token to 0 to prevent sampling it
+            if not tokenizer.use_pretrained:
+                unk_idx = tokenizer.vocab["<unk>"]
+                next_token_logits[0, unk_idx] = float(
+                    "-inf"
+                )  # Set to negative infinity
+
             # Sample from the distribution
             probs = torch.softmax(next_token_logits, dim=-1)
             next_token = torch.multinomial(probs, num_samples=1)
@@ -246,6 +253,17 @@ def plot_loss(train_losses, test_losses, save_path="plots/loss.png"):
 
 def main():
     cfg = SimpleNamespace(**{})
+    
+    # data
+    cfg.dataset = "austen-emma.txt"
+    cfg.num_samples = 1000
+    cfg.min_vocab_freq = 2
+    cfg.max_vocab_size = 10000
+    cfg.seq_length = 10
+    cfg.train_size = 0.9
+    cfg.use_pretrained = False
+    cfg.pretrained_model = "bert-base-uncased"
+    
     # training
     cfg.batch_size = 128
     cfg.num_epochs = 3
@@ -259,25 +277,17 @@ def main():
     cfg.d_ff = 1024
     cfg.dropout = 0.1
     cfg.max_seq_length = 20
-    cfg.max_length = 15
-
-    # data
-    cfg.num_samples = 1000
-    cfg.min_vocab_freq = 2
-    cfg.max_vocab_size = 10000
-    cfg.seq_length = 10
-    cfg.train_size = 0.9
-    cfg.use_pretrained = False
-    cfg.pretrained_model = "bert-base-uncased"
+    cfg.max_length = 15    
+    
+    # text generation
+    cfg.max_length_gen = 15 # max length of generated text
+    cfg.seq_length_gen = 10 # sequence length for generation
+    cfg.temperature = 0.7 
+    
 
     # Load a small dataset from NLTK Gutenberg
     print("Loading dataset...")
-    texts = gutenberg.raw("austen-emma.txt").split(".")[: cfg.num_samples]
-
-    # print the first 5 sentences
-    for i in range(5):
-        print(texts[i])
-        print("-" * 50)
+    texts = gutenberg.raw(cfg.dataset).split(".")[: cfg.num_samples]
 
     # Initialize tokenizer with larger vocabulary and lower frequency threshold
     print("Initializing tokenizer...")
@@ -346,7 +356,7 @@ def main():
         print(f"Test Loss: {test_loss:.4f}")
 
         # Generate some sample text
-        prompts = ["the quick brown ", "her mother had", "she was the", "I love "]
+        prompts = ["the man who", "her mother had", "she was the", "I love "]
 
         print("\nGenerating samples:")
         for prompt in prompts:
@@ -359,9 +369,10 @@ def main():
                 model,
                 tokenizer,
                 prompt,
-                max_length=cfg.max_length,
+                max_length=cfg.max_length_gen,
+                temperature=cfg.temperature,
                 device=device,
-                seq_length=cfg.seq_length,
+                seq_length=cfg.seq_length_gen,
             )
             print(f"Prompt: {prompt}")
             print(f"Generated: {generated}")
