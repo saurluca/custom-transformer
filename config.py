@@ -1,10 +1,11 @@
 from types import SimpleNamespace
 import torch
+
 cfg = SimpleNamespace(**{})
 
 # run config
 cfg.save_model = False
-cfg.generate_samples = False 
+cfg.generate_samples = False
 
 # data
 cfg.text_names = [

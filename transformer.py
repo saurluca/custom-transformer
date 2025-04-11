@@ -140,6 +140,7 @@ class TransformerDecoder(nn.Module):
         x = self.fc(x)
         return F.log_softmax(x, dim=-1)
 
+
 class TransformerEncoder(nn.Module):
     def __init__(
         self, vocab_size, d_model, num_layers, num_heads, d_ff, dropout, max_seq_length

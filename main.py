@@ -2,7 +2,15 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import json
-from word_prediction import WordTokenizer, get_texts, prepare_sequences, init_loss_fn, train_model, plot_loss, split_train_test
+from word_prediction import (
+    WordTokenizer,
+    get_texts,
+    prepare_sequences,
+    init_loss_fn,
+    train_model,
+    plot_loss,
+    split_train_test,
+)
 from transformer import TransformerDecoder
 from config import cfg
 import nltk

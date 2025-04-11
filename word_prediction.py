@@ -401,5 +401,3 @@ def split_train_test(sequences, train_size=0.9):
     train_sequences = sequences[:train_size]
     test_sequences = sequences[train_size:]
     return train_sequences, test_sequences
-
-
