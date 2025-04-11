@@ -1,24 +1,12 @@
-import json
-from types import SimpleNamespace
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import nltk
-from nltk.corpus import gutenberg
+from nltk.corpus import webtext, gutenberg
 from nltk.tokenize import word_tokenize
 from collections import Counter
-from transformer import TransformerDecoder
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
 from tokenizers import Tokenizer
-
-# Download necessary NLTK data
-print("Downloading NLTK data...")
-nltk.download("gutenberg")
-nltk.download("punkt")
-nltk.download("punkt_tab")
-nltk.download("averaged_perceptron_tagger")
 
 
 class WordTokenizer:
@@ -50,7 +38,7 @@ class WordTokenizer:
             self.vocab = {"<pad>": 0, "<unk>": 1, "<s>": 2, "</s>": 3}
 
             # Define punctuation to remove (keeping only , and .)
-            punctuation = set('!"#$%&\'()*+-/:;<=>?@[\\]^_`{|}~"')
+            punctuation = set('!"#$%&\'()*+-/;<=>?@[\\]^_`{|}~"')
             punctuation.add("--")
             punctuation.add("''")
             punctuation.add("``")
@@ -86,12 +74,27 @@ class WordTokenizer:
 def prepare_sequences(texts, tokenizer, seq_length=10):
     """Prepare sequences for training"""
     sequences = []
+
+    # Process each text as a continuous stream
     for text in texts:
+        # Convert text to tokens
         tokens = tokenizer.encode(text)
-        # Create sequences of length seq_length + 1 (input + target)
-        for i in range(len(tokens) - seq_length):
-            seq = tokens[i : i + seq_length + 1]
-            sequences.append(seq)
+
+        # If text is too short, pad it
+        if len(tokens) < seq_length + 1:
+            # Pad with special tokens to reach required length
+            tokens = tokens + [tokenizer.vocab["<pad>"]] * (
+                seq_length + 1 - len(tokens)
+            )
+            # Add this single sequence
+            sequences.append(tokens)
+        else:
+            # Create sliding windows of fixed size
+            for i in range(len(tokens) - seq_length):
+                seq = tokens[i : i + seq_length + 1]
+                sequences.append(seq)
+
+    # Convert to tensor
     return torch.tensor(sequences)
 
 
@@ -181,19 +184,16 @@ def train_model(
     tokenizer,
     optimizer,
     criterion,
-    device,
     cfg,
 ):
-    # Training loop
-    print("Starting training...")
     train_losses = []
     test_losses = []
 
     for epoch in range(cfg.num_epochs):
         train_loss = train_one_epoch(
-            model, train_loader, optimizer, criterion, device, epoch
+            model, train_loader, optimizer, criterion, cfg.device, epoch
         )
-        test_loss = evaluate_model(model, test_loader, criterion, device)
+        test_loss = evaluate_model(model, test_loader, criterion, cfg.device)
 
         train_losses.append(train_loss)
         test_losses.append(test_loss)
@@ -201,6 +201,9 @@ def train_model(
         print(f"Epoch {epoch + 1}/{cfg.num_epochs}:")
         print(f"Training Loss: {train_loss:.4f}")
         print(f"Test Loss: {test_loss:.4f}")
+
+        if not cfg.generate_samples:
+            continue
 
         print("\nGenerating samples:")
         for prompt in cfg.example_prompts:
@@ -211,9 +214,9 @@ def train_model(
                 model,
                 tokenizer,
                 prompt,
-                max_length=cfg.max_length_gen,
+                output_length=cfg.output_length,
                 temperature=cfg.temperature,
-                device=device,
+                device=cfg.device,
                 seq_length=cfg.seq_length_gen,
                 top_k=cfg.top_k,
                 top_p=cfg.top_p,
@@ -273,7 +276,7 @@ def generate_text(
     model,
     tokenizer,
     prompt,
-    max_length=20,
+    output_length=20,
     temperature=0.7,
     device="cpu",
     seq_length=10,
@@ -290,7 +293,7 @@ def generate_text(
     tokens = torch.tensor(tokens).unsqueeze(0).to(device)
 
     with torch.no_grad():
-        for _ in range(max_length):
+        for _ in range(output_length):
             # Create causal mask
             seq_length_current = tokens.size(1)
             mask = create_causal_mask(seq_length_current).to(device)
@@ -373,141 +376,30 @@ def plot_loss(train_losses, test_losses, save_path="plots/loss.png"):
     plt.close()
 
 
-def main():
-    cfg = SimpleNamespace(**{})
+def get_texts(text_names, max_chars_per_text=100000):
+    texts = []
+    for text_name in text_names:
+        if text_name.startswith("gutenberg-"):
+            raw_text = gutenberg.raw(text_name[10:])
+            # Limit the text length
+            if len(raw_text) > max_chars_per_text:
+                raw_text = raw_text[:max_chars_per_text]
+            texts.append(raw_text)
+            pass
+        elif text_name.startswith("webtext-"):
+            # Just get the raw text without any sentence splitting
+            raw_text = webtext.raw(text_name[8:])
+            # Limit the text length
+            if len(raw_text) > max_chars_per_text:
+                raw_text = raw_text[:max_chars_per_text]
+            texts.append(raw_text)
+    return texts
 
-    # run config
-    cfg.save_model = False
 
-    # data
-    cfg.dataset = "austen-emma.txt"
-    cfg.num_samples = 10000
-    cfg.min_vocab_freq = 2
-    cfg.max_vocab_size = 10000
-    cfg.seq_length = 15
-    cfg.train_size = 0.9
-    cfg.use_pretrained = False
-    cfg.pretrained_model = "bert-base-uncased"
-
-    # training
-    cfg.batch_size = 128
-    cfg.num_epochs = 4
-    cfg.num_workers = 2
-    cfg.learning_rate = 0.0001
-    cfg.weight_decay = 0.0001
-    cfg.loss_fn = "CrossEntropyLoss"  # "CrossEntropyLoss", "NLL"
-
-    # model
-    cfg.d_model = 256
-    cfg.num_layers = 8
-    cfg.num_heads = 8 
-    cfg.d_ff = 1024  # recommended: 4x d_model
-    cfg.dropout = 0.1
-    cfg.max_seq_length = 20
-    cfg.max_length = 15
-
-    # text generation
-    cfg.max_length_gen = 15  # max length of generated text
-    cfg.seq_length_gen = 15  # sequence length for generation
-    cfg.temperature = 0.7
-    cfg.top_k = 8
-    cfg.top_p = 0.5
-    cfg.sampling_strategy = "top-k"  # "multinomial", "greedy", "top-k", "top-p"
-    cfg.example_prompts = ["The man who ...", "her mother had", "she was the", "I love "]
-    cfg.show_top_k = False
-
-    # Load a small dataset from NLTK Gutenberg
-    print("Loading dataset...")
-    texts = gutenberg.raw(cfg.dataset).split(".")[: cfg.num_samples]
-
-    # Initialize tokenizer with larger vocabulary and lower frequency threshold
-    print("Initializing tokenizer...")
-    tokenizer = WordTokenizer(
-        texts,
-        min_freq=cfg.min_vocab_freq,
-        max_vocab_size=cfg.max_vocab_size,
-        use_pretrained=cfg.use_pretrained,
-        pretrained_model=cfg.pretrained_model,
-    )
-    vocab_size = len(tokenizer)
-    print(f"Vocabulary size: {vocab_size}")
-    # print the first 10 words
-    print("First 10 words in vocabulary:", list(tokenizer.vocab.keys())[:10])
-
-    # Prepare sequences
-    print("Preparing sequences...")
-    sequences = prepare_sequences(texts, tokenizer, seq_length=cfg.seq_length)
-
-    # Split into train and test sets
-    train_size = int(cfg.train_size * len(sequences))
+def split_train_test(sequences, train_size=0.9):
+    train_size = int(train_size * len(sequences))
     train_sequences = sequences[:train_size]
     test_sequences = sequences[train_size:]
-    print(f"Train size: {len(train_sequences)}, Test size: {len(test_sequences)}")
-
-    # Create data loaders
-    train_loader = torch.utils.data.DataLoader(
-        train_sequences,
-        batch_size=cfg.batch_size,
-        shuffle=True,
-        num_workers=cfg.num_workers,
-    )
-    test_loader = torch.utils.data.DataLoader(
-        test_sequences, batch_size=cfg.batch_size, num_workers=cfg.num_workers
-    )
-
-    # Initialize model
-    print("Initializing model...")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
-
-    model = TransformerDecoder(
-        vocab_size=vocab_size,
-        d_model=cfg.d_model,
-        num_layers=cfg.num_layers,
-        num_heads=cfg.num_heads,
-        d_ff=cfg.d_ff,
-        dropout=cfg.dropout,
-        max_seq_length=cfg.max_seq_length,
-    ).to(device)
-
-    # print model parameters number
-    print(f"Model parameters number: {sum(p.numel() for p in model.parameters())}")
-
-    # Loss and optimizer
-    criterion = init_loss_fn(cfg.loss_fn)
-    optimizer = optim.Adam(
-        model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay
-    )
-
-    train_losses, test_losses = train_model(
-        model,
-        train_loader,
-        test_loader,
-        tokenizer,
-        optimizer,
-        criterion,
-        device,
-        cfg,
-    )
-
-    # Plot and save the loss curves
-    plot_loss(train_losses, test_losses)
-
-    print("Training completed!")
-
-    if cfg.save_model:
-        # save model
-        torch.save(model.state_dict(), "models/model.pth")
-
-        # save tokenizer
-        torch.save(tokenizer, "models/tokenizer.pth")
-
-        # save config
-        with open("models/config.json", "w") as f:
-            json.dump(cfg, f)
-
-        print("Model, tokenizer, and config saved to models/")
+    return train_sequences, test_sequences
 
 
-if __name__ == "__main__":
-    main()
