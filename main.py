@@ -2,6 +2,7 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import json
+from lstm import LSTMLanguageModel
 from word_prediction import (
     WordTokenizer,
     get_texts,
@@ -62,16 +63,25 @@ def main():
     print(f"Initializing {cfg.model_type} model...")
     print(f"Using device: {cfg.device}")
 
-    modelClass = get_model_class(cfg.model_type)    
-    model = modelClass(
-        vocab_size=vocab_size,
-        d_model=cfg.d_model,
-        num_layers=cfg.num_layers,
-        num_heads=cfg.num_heads,
-        d_ff=cfg.d_ff,
-        dropout=cfg.dropout,
-        max_seq_length=cfg.max_seq_length,
-    ).to(cfg.device)
+    if cfg.model_type == "lstm":
+        model = LSTMLanguageModel(
+            vocab_size=vocab_size,
+            embedding_dim=cfg.embedding_dim_lstm,
+            hidden_dim=cfg.hidden_dim_lstm,
+            num_layers=cfg.num_layers_lstm,
+            dropout=cfg.dropout_lstm,
+        ).to(cfg.device)
+    else:
+        modelClass = get_model_class(cfg.model_type)
+        model = modelClass(
+            vocab_size=vocab_size,
+            d_model=cfg.d_model,
+            num_layers=cfg.num_layers,
+            num_heads=cfg.num_heads,
+            d_ff=cfg.d_ff,
+            dropout=cfg.dropout,
+            max_seq_length=cfg.max_seq_length,
+        ).to(cfg.device)
 
     print(f"Model parameters number: {sum(p.numel() for p in model.parameters())}")
 

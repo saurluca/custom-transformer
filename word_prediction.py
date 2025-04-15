@@ -9,6 +9,7 @@ import os
 from tokenizers import Tokenizer
 
 from transformer import Transformer, TransformerDecoder
+from lstm import LSTMLanguageModel
 
 
 class WordTokenizer:
@@ -105,6 +106,8 @@ def get_model_class(model_type):
         return TransformerDecoder
     elif model_type == "transformer":
         return Transformer
+    elif model_type == "lstm":
+        return LSTMLanguageModel
     else:
         raise ValueError(f"Invalid model: {model_type}")
 
@@ -130,7 +133,9 @@ def init_loss_fn(loss_fn):
         raise ValueError(f"Invalid loss function: {loss_fn}")
 
 
-def train_one_epoch(model, train_loader, optimizer, criterion, device, epoch, model_type):
+def train_one_epoch(
+    model, train_loader, optimizer, criterion, device, epoch, model_type
+):
     """Train the model for one epoch"""
     model.train()
     total_loss = 0
@@ -150,6 +155,8 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, epoch, mo
             outputs = model(inputs, causal_mask)
         elif model_type == "transformer":
             outputs = model(inputs, inputs, causal_mask, causal_mask, cross_mask)
+        elif model_type == "lstm":
+            outputs, _ = model(inputs)  # Unpack the tuple, ignoring hidden state
         else:
             raise ValueError(f"Invalid model: {model_type}")
 
@@ -191,6 +198,8 @@ def evaluate_model(model, test_loader, criterion, device, model_type):
                 outputs = model(inputs, causal_mask)
             elif model_type == "transformer":
                 outputs = model(inputs, inputs, causal_mask, causal_mask, cross_mask)
+            elif model_type == "lstm":
+                outputs, _ = model(inputs)  # Unpack the tuple, ignoring hidden state
             else:
                 raise ValueError(f"Invalid model: {model_type}")
 
@@ -253,6 +262,7 @@ def train_model(
                 top_p=cfg.top_p,
                 sampling_strategy=cfg.sampling_strategy,
                 show_top_k=cfg.show_top_k,
+                model_type=cfg.model_type,
             )
             print(f"Prompt: {prompt}")
             print(f"Decoded input: {tokenizer.decode(input_tokens)}")
@@ -315,6 +325,7 @@ def generate_text(
     top_k=5,
     top_p=0.8,
     sampling_strategy="multinomial",
+    model_type="transformer",
 ):
     """Generate text from a prompt"""
     model.eval()
@@ -332,8 +343,16 @@ def generate_text(
                 seq_length_current, seq_length_current
             ).to(device)
 
-            # Get model output
-            output = model(tokens, tokens, causal_mask, causal_mask, cross_mask)
+            # Get model output based on model type
+            if model_type == "lstm":
+                output, _ = model(tokens)  # Unpack the tuple for LSTM
+            elif model_type == "transformer":
+                output = model(tokens, tokens, causal_mask, causal_mask, cross_mask)
+            elif model_type == "decoder":
+                output = model(tokens, causal_mask)
+            else:
+                raise ValueError(f"Invalid model: {model_type}")
+
             next_token_logits = output[:, -1, :] / temperature
 
             # Set probability of <unk> token to 0 to prevent sampling it

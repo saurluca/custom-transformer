@@ -5,7 +5,8 @@ cfg = SimpleNamespace(**{})
 
 # run config
 cfg.save_model = False
-cfg.generate_samples = True
+cfg.generate_samples = True # generate sample text based on example prompts
+cfg.example_prompts = ["The man who", "The thing that", "I love "]
 
 # data
 cfg.text_names = [
@@ -28,14 +29,20 @@ cfg.learning_rate = 0.0001
 cfg.weight_decay = 0.0001
 cfg.loss_fn = "CrossEntropyLoss"  # "CrossEntropyLoss", "NLL"
 
-# model
-cfg.model_type = "transformer"  # "decoder", "transformer"
+# Transformer model
+cfg.model_type = "lstm"  # "decoder", "transformer", "lstm"
 cfg.d_model = 256 # model dimension
 cfg.num_layers = 2 # number of layers, same for encoder and decoder
 cfg.num_heads = 8 # number of attention heads
 cfg.d_ff = 1024  # recommended: 4x d_model
 cfg.dropout = 0.1 # dropout rate
 cfg.max_seq_length = 32
+
+# LSTM model
+cfg.embedding_dim_lstm = 256
+cfg.hidden_dim_lstm = 256
+cfg.num_layers_lstm = 2
+cfg.dropout_lstm = 0.1
 
 # text generation
 cfg.output_length = 24  # max length of generated text
@@ -44,7 +51,6 @@ cfg.temperature = 1.0
 cfg.top_k = 15
 cfg.top_p = 0.5
 cfg.sampling_strategy = "multinomial"  # "multinomial", "greedy", "top-k", "top-p"
-cfg.example_prompts = ["The man who", "The thing that", "I love "]
 cfg.show_top_k = False
 
 cfg.device = "cuda" if torch.cuda.is_available() else "cpu"
