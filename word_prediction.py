@@ -104,6 +104,12 @@ def create_causal_mask(seq_length):
     return ~mask
 
 
+def create_cross_attention_mask(tgt_len, src_len):
+    """Create a cross attention mask that allows each position in the decoder to attend to all positions in the encoder"""
+    # For cross attention, we typically allow attending to all encoder positions
+    return torch.ones(tgt_len, src_len).bool()
+
+
 def init_loss_fn(loss_fn):
     if loss_fn == "NLL":
         return nn.NLLLoss()
@@ -113,7 +119,7 @@ def init_loss_fn(loss_fn):
         raise ValueError(f"Invalid loss function: {loss_fn}")
 
 
-def train_one_epoch(model, train_loader, optimizer, criterion, device, epoch):
+def train_one_epoch(model, train_loader, optimizer, criterion, device, epoch, model_type):
     """Train the model for one epoch"""
     model.train()
     total_loss = 0
@@ -123,12 +129,18 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, epoch):
         inputs = sequences[:, :-1].to(device)
         targets = sequences[:, 1:].to(device)
 
-        # Create causal mask
+        # Create masks
         seq_length = inputs.size(1)
-        mask = create_causal_mask(seq_length).to(device)
+        causal_mask = create_causal_mask(seq_length).to(device)
+        cross_mask = create_cross_attention_mask(seq_length, seq_length).to(device)
 
         # Forward pass
-        outputs = model(inputs, mask)
+        if model_type == "decoder":
+            outputs = model(inputs, causal_mask)
+        elif model_type == "transformer":
+            outputs = model(inputs, inputs, causal_mask, causal_mask, cross_mask)
+        else:
+            raise ValueError(f"Invalid model: {model_type}")
 
         # Reshape outputs and targets for loss calculation
         outputs = outputs.view(-1, outputs.size(-1))
@@ -147,7 +159,7 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, epoch):
     return total_loss / len(train_loader)
 
 
-def evaluate_model(model, test_loader, criterion, device):
+def evaluate_model(model, test_loader, criterion, device, model_type):
     """Evaluate the model on the test set"""
     model.eval()
     total_loss = 0
@@ -158,12 +170,18 @@ def evaluate_model(model, test_loader, criterion, device):
             inputs = sequences[:, :-1].to(device)
             targets = sequences[:, 1:].to(device)
 
-            # Create causal mask
+            # Create masks
             seq_length = inputs.size(1)
-            mask = create_causal_mask(seq_length).to(device)
+            causal_mask = create_causal_mask(seq_length).to(device)
+            cross_mask = create_cross_attention_mask(seq_length, seq_length).to(device)
 
             # Forward pass
-            outputs = model(inputs, mask)
+            if model_type == "decoder":
+                outputs = model(inputs, causal_mask)
+            elif model_type == "transformer":
+                outputs = model(inputs, inputs, causal_mask, causal_mask, cross_mask)
+            else:
+                raise ValueError(f"Invalid model: {model_type}")
 
             # Reshape outputs and targets for loss calculation
             outputs = outputs.view(-1, outputs.size(-1))
@@ -191,9 +209,11 @@ def train_model(
 
     for epoch in range(cfg.num_epochs):
         train_loss = train_one_epoch(
-            model, train_loader, optimizer, criterion, cfg.device, epoch
+            model, train_loader, optimizer, criterion, cfg.device, epoch, cfg.model_type
         )
-        test_loss = evaluate_model(model, test_loader, criterion, cfg.device)
+        test_loss = evaluate_model(
+            model, test_loader, criterion, cfg.device, cfg.model_type
+        )
 
         train_losses.append(train_loss)
         test_losses.append(test_loss)
@@ -294,12 +314,15 @@ def generate_text(
 
     with torch.no_grad():
         for _ in range(output_length):
-            # Create causal mask
+            # Create masks
             seq_length_current = tokens.size(1)
-            mask = create_causal_mask(seq_length_current).to(device)
+            causal_mask = create_causal_mask(seq_length_current).to(device)
+            cross_mask = create_cross_attention_mask(
+                seq_length_current, seq_length_current
+            ).to(device)
 
             # Get model output
-            output = model(tokens, mask)
+            output = model(tokens, tokens, causal_mask, causal_mask, cross_mask)
             next_token_logits = output[:, -1, :] / temperature
 
             # Set probability of <unk> token to 0 to prevent sampling it

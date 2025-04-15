@@ -12,9 +12,7 @@ cfg.text_names = [
     "gutenberg-austen-emma.txt",
     # "webtext-grail.txt",
 ]  # "webtext-overheard.txt", "gutenberg-austen-emma.txt"
-
-cfg.num_samples = 10000
-cfg.max_chars_per_text = 200000  # Limit each text to num of characters
+cfg.max_chars_per_text = 20000  # Limit each text to num of characters
 cfg.min_vocab_freq = 2
 cfg.max_vocab_size = 10000
 cfg.seq_length = 32
@@ -24,18 +22,19 @@ cfg.pretrained_model = "bert-base-uncased"
 
 # training
 cfg.batch_size = 128
-cfg.num_epochs = 3
+cfg.num_epochs = 10
 cfg.num_workers = 2
 cfg.learning_rate = 0.0001
 cfg.weight_decay = 0.0001
 cfg.loss_fn = "CrossEntropyLoss"  # "CrossEntropyLoss", "NLL"
 
 # model
-cfg.d_model = 256
-cfg.num_layers = 8
-cfg.num_heads = 8
+cfg.model_type = "transformer"  # "decoder", "transformer"
+cfg.d_model = 256 # model dimension
+cfg.num_layers = 2 # number of layers, same for encoder and decoder
+cfg.num_heads = 8 # number of attention heads
 cfg.d_ff = 1024  # recommended: 4x d_model
-cfg.dropout = 0.1
+cfg.dropout = 0.1 # dropout rate
 cfg.max_seq_length = 32
 
 # text generation
