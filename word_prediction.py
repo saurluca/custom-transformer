@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import os
 from tokenizers import Tokenizer
 
+from transformer import Transformer, TransformerDecoder
+
 
 class WordTokenizer:
     def __init__(
@@ -96,6 +98,15 @@ def prepare_sequences(texts, tokenizer, seq_length=10):
 
     # Convert to tensor
     return torch.tensor(sequences)
+
+
+def get_model_class(model_type):
+    if model_type == "decoder":
+        return TransformerDecoder
+    elif model_type == "transformer":
+        return Transformer
+    else:
+        raise ValueError(f"Invalid model: {model_type}")
 
 
 def create_causal_mask(seq_length):

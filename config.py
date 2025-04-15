@@ -5,7 +5,7 @@ cfg = SimpleNamespace(**{})
 
 # run config
 cfg.save_model = False
-cfg.generate_samples = False
+cfg.generate_samples = True
 
 # data
 cfg.text_names = [
@@ -22,7 +22,7 @@ cfg.pretrained_model = "bert-base-uncased"
 
 # training
 cfg.batch_size = 128
-cfg.num_epochs = 10
+cfg.num_epochs = 4
 cfg.num_workers = 2
 cfg.learning_rate = 0.0001
 cfg.weight_decay = 0.0001
@@ -40,11 +40,11 @@ cfg.max_seq_length = 32
 # text generation
 cfg.output_length = 24  # max length of generated text
 cfg.seq_length_gen = 32  # sequence length for generation
-cfg.temperature = 1.5
+cfg.temperature = 1.0
 cfg.top_k = 15
 cfg.top_p = 0.5
 cfg.sampling_strategy = "multinomial"  # "multinomial", "greedy", "top-k", "top-p"
-cfg.example_prompts = ["The man who", "Pizza guy:", "I love "]
+cfg.example_prompts = ["The man who", "The thing that", "I love "]
 cfg.show_top_k = False
 
 cfg.device = "cuda" if torch.cuda.is_available() else "cpu"

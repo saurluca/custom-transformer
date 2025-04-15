@@ -10,8 +10,8 @@ from word_prediction import (
     train_model,
     plot_loss,
     split_train_test,
+    get_model_class,
 )
-from transformer import TransformerDecoder, Transformer
 from config import cfg
 import nltk
 
@@ -59,31 +59,19 @@ def main():
         test_sequences, batch_size=cfg.batch_size, num_workers=cfg.num_workers
     )
 
-    print("Initializing model...")
+    print(f"Initializing {cfg.model_type} model...")
     print(f"Using device: {cfg.device}")
-    
-    if cfg.model_type == "decoder":
-        model = TransformerDecoder(
-            vocab_size=vocab_size,
-            d_model=cfg.d_model,
-            num_layers=cfg.num_layers,
-            num_heads=cfg.num_heads,
-            d_ff=cfg.d_ff,
-            dropout=cfg.dropout,
-            max_seq_length=cfg.max_seq_length,
-        ).to(cfg.device)
-    elif cfg.model_type == "transformer":
-        model = Transformer(
-            vocab_size=vocab_size,
-            d_model=cfg.d_model,
-            num_layers=cfg.num_layers,
-            num_heads=cfg.num_heads,
-            d_ff=cfg.d_ff,
-            dropout=cfg.dropout,
-            max_seq_length=cfg.max_seq_length,
-        ).to(cfg.device)
-    else:
-        raise ValueError(f"Invalid model: {cfg.model_type}")
+
+    modelClass = get_model_class(cfg.model_type)    
+    model = modelClass(
+        vocab_size=vocab_size,
+        d_model=cfg.d_model,
+        num_layers=cfg.num_layers,
+        num_heads=cfg.num_heads,
+        d_ff=cfg.d_ff,
+        dropout=cfg.dropout,
+        max_seq_length=cfg.max_seq_length,
+    ).to(cfg.device)
 
     print(f"Model parameters number: {sum(p.numel() for p in model.parameters())}")
 
