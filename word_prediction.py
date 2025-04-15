@@ -1,77 +1,12 @@
 import torch
 import torch.nn as nn
 from nltk.corpus import webtext, gutenberg
-from nltk.tokenize import word_tokenize
-from collections import Counter
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
-from tokenizers import Tokenizer
 
 from transformer import Transformer, TransformerDecoder
 from lstm import LSTMLanguageModel
-
-
-class WordTokenizer:
-    def __init__(
-        self,
-        texts,
-        min_freq=2,
-        max_vocab_size=10000,
-        use_pretrained=False,
-        pretrained_model="bert-base-uncased",
-    ):
-        self.use_pretrained = use_pretrained
-
-        if use_pretrained:
-            # Use a pretrained tokenizer
-            self.tokenizer = Tokenizer.from_pretrained(pretrained_model)
-            # Create vocabulary mappings from pretrained tokenizer
-            self.vocab = {
-                token: idx for token, idx in self.tokenizer.get_vocab().items()
-            }
-            self.idx2word = {idx: token for token, idx in self.vocab.items()}
-        else:
-            # Original word-level tokenization
-            word_counts = Counter()
-            for text in texts:
-                word_counts.update(word_tokenize(text.lower()))
-
-            # Create vocabulary with special tokens
-            self.vocab = {"<pad>": 0, "<unk>": 1, "<s>": 2, "</s>": 3}
-
-            # Define punctuation to remove (keeping only , and .)
-            punctuation = set('!"#$%&\'()*+-/;<=>?@[\\]^_`{|}~"')
-            punctuation.add("--")
-            punctuation.add("''")
-            punctuation.add("``")
-            punctuation.add('""')
-
-            # Add most common words to vocabulary, excluding punctuation
-            for word, count in word_counts.most_common(max_vocab_size - 4):
-                if count >= min_freq and word not in punctuation:
-                    self.vocab[word] = len(self.vocab)
-
-            # Create reverse mapping
-            self.idx2word = {idx: word for word, idx in self.vocab.items()}
-
-    def encode(self, text):
-        """Convert text to token indices"""
-        if self.use_pretrained:
-            return self.tokenizer.encode(text).ids
-        else:
-            tokens = word_tokenize(text.lower())
-            return [self.vocab.get(token, self.vocab["<unk>"]) for token in tokens]
-
-    def decode(self, indices):
-        """Convert token indices back to text"""
-        if self.use_pretrained:
-            return self.tokenizer.decode(indices)
-        else:
-            return " ".join([self.idx2word.get(idx, "<unk>") for idx in indices])
-
-    def __len__(self):
-        return len(self.vocab)
 
 
 def prepare_sequences(texts, tokenizer, seq_length=10):
@@ -384,9 +319,7 @@ def generate_text(
                 )
                 print()
 
-            # Append to sequence
-            tokens = torch.cat([tokens, next_token], dim=1)
-
+            
             # Stop if we predict the end token or reach max sequence length
             if tokenizer.use_pretrained:
                 # For BERT tokenizer, check for [SEP] token
@@ -402,6 +335,9 @@ def generate_text(
                     or tokens.size(1) >= seq_length
                 ):
                     break
+                
+            # Append to sequence
+            tokens = torch.cat([tokens, next_token], dim=1)
 
     return tokenizer.decode(tokens[0].tolist())
 
