@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 import json
 import nltk
 
-from lstm import LSTMLanguageModel
+from src.LTSM.lstm import LSTMLanguageModel
 from word_prediction import (
     get_texts,
     prepare_sequences,
@@ -14,7 +14,7 @@ from word_prediction import (
     split_train_test,
     get_model_class,
 )
-from config import cfg
+from src.config.config import cfg
 from word_tokenizer import WordTokenizer
 
 
