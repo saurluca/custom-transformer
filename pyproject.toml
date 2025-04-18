@@ -1,7 +1,8 @@
 [project]
 name = "custom-transformer"
 version = "0.1.0"
-description = "Add your description here"
+description = "A simple custom transformer using torch library. 
+has been implemented in Spring 2025"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -10,6 +11,9 @@ dependencies = [
     "numpy>=2.2.4",
     "pandas>=2.2.3",
     "tokenizers>=0.21.1",
-    "torch>=2.6.0",
     "tqdm>=4.67.1",
 ]
+#Torch is not on PyPi package enviroment so has to be installed manually 
+[tool.pdm.source."pytorch"]
+url = "https://download.pytorch.org/whl/cpu"
+verify_ssl = true
