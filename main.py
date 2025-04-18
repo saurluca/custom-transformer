@@ -4,6 +4,10 @@ from torch.utils.data import DataLoader
 import json
 import nltk
 import sys 
+import certifi
+
+
+
 
 sys.path.append('src')
 
@@ -22,13 +26,6 @@ from Config.config import cfg
 from Tokenize.word_tokenizer import WordTokenizer
 
 
-# Download necessary NLTK data
-print("Downloading NLTK data...")
-nltk.download("gutenberg")
-nltk.download("webtext")
-nltk.download("punkt")
-nltk.download("punkt_tab")
-nltk.download("averaged_perceptron_tagger")
 
 
 def main():

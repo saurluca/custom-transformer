@@ -101,7 +101,7 @@ def train_one_epoch(
 
         # Reshape outputs and targets for loss calculation
         outputs = outputs.view(-1, outputs.size(-1))
-        targets = targets.view(-1)
+        targets = targets.contiguous().view(-1)
 
         # Calculate loss
         loss = criterion(outputs, targets)
@@ -144,7 +144,7 @@ def evaluate_model(model, test_loader, criterion, device, model_type):
 
             # Reshape outputs and targets for loss calculation
             outputs = outputs.view(-1, outputs.size(-1))
-            targets = targets.view(-1)
+            targets = targets.contiguous().view(-1)
 
             # Calculate loss
             loss = criterion(outputs, targets)
