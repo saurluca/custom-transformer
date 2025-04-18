@@ -3,9 +3,13 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import json
 import nltk
+import sys 
+
+sys.path.append('src')
+
 
 from src.LTSM.lstm import LSTMLanguageModel
-from word_prediction import (
+from Tokenize.word_prediction import (
     get_texts,
     prepare_sequences,
     init_loss_fn,
@@ -14,8 +18,8 @@ from word_prediction import (
     split_train_test,
     get_model_class,
 )
-from src.config.config import cfg
-from word_tokenizer import WordTokenizer
+from Config.config import cfg
+from Tokenize.word_tokenizer import WordTokenizer
 
 
 # Download necessary NLTK data
