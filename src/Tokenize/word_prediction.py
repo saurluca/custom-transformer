@@ -4,9 +4,13 @@ from nltk.corpus import webtext, gutenberg
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
+import sys
 
-from transformer import Transformer, TransformerDecoder
-from lstm import LSTMLanguageModel
+
+sys.path.append('sys')
+
+from Transformer.transformer import Transformer, TransformerDecoder
+from LTSM.lstm import LSTMLanguageModel
 
 
 def prepare_sequences(texts, tokenizer, seq_length=10):
