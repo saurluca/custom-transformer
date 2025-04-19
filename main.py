@@ -175,9 +175,18 @@ def main():
     if cfg.save_model:
         print("Saving model...")
         # save model
-        torch.save(model.state_dict(), "models/model.pth")
+        try : 
+            torch.save(model.state_dict(), "models/model.pth")
+            print("The model has been saved successfully!")
+        except Exception as e :
+            print(f"failed with the error message: {e}") 
         # save tokenizer
-        torch.save(tokenizer, "models/tokenizer.pth")
+        try :
+            torch.save(tokenizer, "models/tokenizer.pth")
+            print("The tokenizer has been saved successfully!")
+        except Exception as e:
+            print(f"failed with the error message: {e}")
+        
         # save config
         with open("models/config.json", "w") as f:
             json.dump(cfg, f)
