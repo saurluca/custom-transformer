@@ -1,8 +1,7 @@
 [project]
 name = "custom-transformer"
 version = "0.1.0"
-description = "A simple custom transformer using torch library. 
-has been implemented in Spring 2025"
+description = "A simple custom transformer using torch library and has been implemented in Spring 2025"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
