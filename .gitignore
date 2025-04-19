@@ -15,5 +15,6 @@ models/*
 
 # prevent lock files 
 *.lock
+*.pdm-python 
 
 *.json 
