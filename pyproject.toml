@@ -1,7 +1,7 @@
 [project]
 name = "custom-transformer"
 version = "0.1.0"
-description = "A simple custom transformer using torch library.\nhas been implemented in Spring 2025"
+description = "A simple custom transformer using torch library. implemented in Spring 2025"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -11,7 +11,10 @@ dependencies = [
     "pandas>=2.2.3",
     "tokenizers>=0.21.1",
     "tqdm>=4.67.1",
-    "torch", ]
+    "torch",
+    "transformers>=4.0.0",
+    "fsspec>=2023.1.0",
+    "datasets>=2.0.0"]
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"

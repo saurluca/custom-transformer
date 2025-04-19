@@ -1,0 +1,106 @@
+import torch
+import json
+from datasets import load_dataset
+from transformers import AutoTokenizer
+from torch.utils.data import DataLoader, TensorDataset
+
+def preprocess_wmt14(split, tokenizer, max_length=50):
+    """
+    Preprocess the WMT14 dataset for training.
+
+    Args:
+        split (str): Dataset split to preprocess ("train", "validation", "test").
+        tokenizer: Tokenizer instance for tokenizing text.
+        max_length (int): Maximum sequence length.
+
+    Returns:
+        List of tokenized input-output pairs.
+    """
+    # Load the WMT14 dataset
+    dataset = load_dataset("wmt14", "de-en", split=split)
+
+    tokenized_data = []
+    for example in dataset:
+        # Extract English and German sentences
+        src_text = example["translation"]["en"]
+        tgt_text = example["translation"]["de"]
+
+        # Tokenize and truncate
+        src_tokens = tokenizer.encode(src_text, truncation=True, max_length=max_length)
+        tgt_tokens = tokenizer.encode(tgt_text, truncation=True, max_length=max_length)
+
+        tokenized_data.append((src_tokens, tgt_tokens))
+
+    return tokenized_data
+
+def save_preprocessed_data(data, save_path):
+    """
+    Save preprocessed data to a JSON file.
+
+    Args:
+        data: List of tokenized input-output pairs.
+        save_path (str): Path to save the JSON file.
+    """
+    with open(save_path, "w", encoding="utf-8") as f:
+        for src_tokens, tgt_tokens in data:
+            json.dump({"src": src_tokens, "tgt": tgt_tokens}, f)
+            f.write("\n")
+
+def load_preprocessed_data(file_path):
+    """
+    Load preprocessed data from a JSON file.
+
+    Args:
+        file_path (str): Path to the JSON file.
+
+    Returns:
+        List of tokenized input-output pairs.
+    """
+    data = []
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            example = json.loads(line)
+            data.append((example["src"], example["tgt"]))
+    return data
+
+def prepare_dataloader(data, batch_size=32, max_length=50):
+    """
+    Prepare a DataLoader for training.
+
+    Args:
+        data: List of tokenized input-output pairs.
+        batch_size (int): Batch size for the DataLoader.
+        max_length (int): Maximum sequence length.
+
+    Returns:
+        DataLoader: PyTorch DataLoader.
+    """
+    inputs, targets = zip(*data)
+
+    # Pad sequences to max_length
+    inputs = [seq + [0] * (max_length - len(seq)) for seq in inputs]
+    targets = [seq + [0] * (max_length - len(seq)) for seq in targets]
+
+    # Convert to tensors
+    inputs = torch.tensor(inputs, dtype=torch.long)
+    targets = torch.tensor(targets, dtype=torch.long)
+
+    # Create DataLoader
+    dataset = TensorDataset(inputs, targets)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    return dataloader
+
+# Example usage
+tokenizer = AutoTokenizer.from_pretrained("bert-base-multilingual-cased")
+train_data = preprocess_wmt14("train", tokenizer)
+save_preprocessed_data(train_data, "datasets/wmt14/train.json")
+train_data = load_preprocessed_data("datasets/wmt14/train.json")
+train_loader = prepare_dataloader(train_data)
+
+# Iterate through the DataLoader
+for batch in train_loader:
+    inputs, targets = batch
+    print("Inputs:", inputs)
+    print("Targets:", targets)
+    break
