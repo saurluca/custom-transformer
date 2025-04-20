@@ -4,9 +4,13 @@ from nltk.corpus import webtext, gutenberg
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
+import sys
 
-from transformer import Transformer, TransformerDecoder
-from lstm import LSTMLanguageModel
+
+sys.path.append('sys')
+
+from Transformer.transformer import Transformer, TransformerDecoder
+from LTSM.lstm import LSTMLanguageModel
 
 
 def prepare_sequences(texts, tokenizer, seq_length=10):
@@ -97,7 +101,7 @@ def train_one_epoch(
 
         # Reshape outputs and targets for loss calculation
         outputs = outputs.view(-1, outputs.size(-1))
-        targets = targets.view(-1)
+        targets = targets.contiguous().view(-1)
 
         # Calculate loss
         loss = criterion(outputs, targets)
@@ -140,7 +144,7 @@ def evaluate_model(model, test_loader, criterion, device, model_type):
 
             # Reshape outputs and targets for loss calculation
             outputs = outputs.view(-1, outputs.size(-1))
-            targets = targets.view(-1)
+            targets = targets.contiguous().view(-1)
 
             # Calculate loss
             loss = criterion(outputs, targets)
