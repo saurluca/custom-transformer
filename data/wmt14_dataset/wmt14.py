@@ -1,8 +1,9 @@
 import torch
 import json
 from datasets import load_dataset
-from transformers import AutoTokenizer
 from torch.utils.data import DataLoader, TensorDataset
+from transformers import AutoTokenizer
+import os 
 
 def preprocess_wmt14(split, tokenizer, max_length=50):
     """
@@ -41,10 +42,14 @@ def save_preprocessed_data(data, save_path):
         data: List of tokenized input-output pairs.
         save_path (str): Path to save the JSON file.
     """
-    with open(save_path, "w", encoding="utf-8") as f:
-        for src_tokens, tgt_tokens in data:
-            json.dump({"src": src_tokens, "tgt": tgt_tokens}, f)
-            f.write("\n")
+    if(os.path.isdir()):
+        with open(save_path, "w", encoding="utf-8") as f:
+            for src_tokens, tgt_tokens in data:
+                json.dump({"src": src_tokens, "tgt": tgt_tokens}, f)
+                f.write("\n")
+    else:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
 
 def load_preprocessed_data(file_path):
     """
@@ -87,12 +92,12 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
 
     # Create DataLoader
     dataset = TensorDataset(inputs, targets)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    return dataloader
+
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # Example usage
-tokenizer = AutoTokenizer.from_pretrained("bert-base-multilingual-cased")
+tokenizer = AutoTokenizer.from_pretrained("Helsinki-NLP/opus-mt-de-en")
 train_data = preprocess_wmt14("train", tokenizer)
 save_preprocessed_data(train_data, "datasets/wmt14/train.json")
 train_data = load_preprocessed_data("datasets/wmt14/train.json")
