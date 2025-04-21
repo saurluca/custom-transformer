@@ -30,8 +30,8 @@ def preprocess_wmt14(split, tokenizer, source_lang="en", target_lang="de", max_l
         tgt_text = example["translation"][target_lang]
 
         # Tokenize and truncate
-        src_tokens = tokenizer.encode(src_text, truncation=True, max_length=max_length)
-        tgt_tokens = tokenizer.encode(tgt_text, truncation=True, max_length=max_length)
+        src_tokens = tokenizer.encode(src_text, max_length=max_length)
+        tgt_tokens = tokenizer.encode(tgt_text, max_length=max_length)
 
         tokenized_data.append((src_tokens, tgt_tokens))
 
