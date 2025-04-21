@@ -4,6 +4,7 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader, TensorDataset
 from transformers import AutoTokenizer
 import os 
+from tqdm import tqdm 
 
 def preprocess_wmt14(split, tokenizer, max_length=50):
     """
@@ -21,7 +22,7 @@ def preprocess_wmt14(split, tokenizer, max_length=50):
     dataset = load_dataset("wmt14", "de-en", split=split)
 
     tokenized_data = []
-    for example in dataset:
+    for example in tqdm(dataset, desc=f"Preprocessing {split} split"):
         # Extract English and German sentences
         src_text = example["translation"]["en"]
         tgt_text = example["translation"]["de"]
