@@ -26,7 +26,7 @@ from data.wmt14_dataset.wmt14 import preprocess_wmt14, prepare_dataloader
 from Evaluation.bleu_score import calculate_bleu
 
 
-def translation(tokenizer, cfg):
+def Translator():
     """
     Test the three translation functions using the WMT14 dataset.
     """
@@ -92,7 +92,7 @@ def translation(tokenizer, cfg):
         print("-" * 50)
 
 
-def main():
+def next_word_generator():
     print("Loading texts...")
     texts = get_texts(cfg.text_names, cfg.max_chars_per_text)
     print(f"Total samples: {len(texts)}")
@@ -190,11 +190,13 @@ def main():
         # save config
         with open("models/config.json", "w") as f:
             json.dump(cfg, f)
-        print("Model, tokenizer, and config saved to models/")
-
-    # Test translation functions
-    translation(tokenizer, cfg)
+        print("Model, tokenizer, and config saved to models/")    
 
 
 if __name__ == "__main__":
-    main()
+    if cfg.mode == "next-word-generation"
+        next_word_generator()
+    if cfg.mode == "summarization":
+        summarization()
+    if cfg.mode == "translation":
+        Translator()
