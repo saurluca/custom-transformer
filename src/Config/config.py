@@ -54,3 +54,8 @@ cfg.sampling_strategy = "multinomial"  # "multinomial", "greedy", "top-k", "top-
 cfg.show_top_k = False
 
 cfg.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+
+# Select mode:
+cfg.mode = "next-word-generation" # Select the task to perform for model; available tasks: ["next-word-generation", "summarization", "translation"]
