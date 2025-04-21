@@ -8,7 +8,7 @@ import certifi
 
 sys.path.append('src')
 
-from src.LTSM.lstm import LSTMLanguageModel
+from LTSM.lstm import LSTMLanguageModel
 from Transformer.transformer import Transformer
 from Translation.translator import translate_lstm, translate_decoder_only, translate_encoder_decoder
 from Tokenize.word_prediction import (
