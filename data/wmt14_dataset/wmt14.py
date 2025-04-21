@@ -42,15 +42,13 @@ def save_preprocessed_data(data, save_path):
         data: List of tokenized input-output pairs.
         save_path (str): Path to save the JSON file.
     """
-    if(os.path.isdir()):
-        with open(save_path, "w", encoding="utf-8") as f:
-            for src_tokens, tgt_tokens in data:
-                json.dump({"src": src_tokens, "tgt": tgt_tokens}, f)
-                f.write("\n")
-    else:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        save_preprocessed_data(data=data,save_path=save_path)
-        
+    directory = os.path.dirname(save_path)
+    if not os.path.isdir(directory):
+        os.makedirs(directory,exist_ok=True)
+    with open(save_path, "w", encoding="utf-8") as f:
+        for src_tokens, tgt_tokens in data:
+            json.dump({"src": src_tokens, "tgt": tgt_tokens}, f)
+            f.write("\n")
 
 def load_preprocessed_data(file_path):
     """
