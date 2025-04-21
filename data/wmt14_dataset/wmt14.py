@@ -103,7 +103,6 @@ def count_json_lines(file_path):
 
 
 # Example usage
-
 tokenizer_name = "Helsinki-NLP/opus-mt-de-en"
 dataset_file_path = "datasets/wmt14/train.json"
 tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
@@ -113,9 +112,3 @@ if not os.path.exists(dataset_file_path):
 num = count_json_lines(dataset_file_path)
 train_data = load_preprocessed_data(dataset_file_path , lines = num)
 train_loader = prepare_dataloader(train_data)
-# Iterate through the DataLoader
-for batch in train_loader:
-    inputs, targets = batch
-    print("Inputs:", inputs)
-    print("Targets:", targets)
-    break
