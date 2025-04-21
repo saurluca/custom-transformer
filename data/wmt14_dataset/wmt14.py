@@ -100,9 +100,8 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
 
     # Create DataLoader
     dataset = TensorDataset(inputs, targets)
-    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    return tqdm(data_loader, desc='Creating Batches for converting data to tensors') 
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 def count_json_lines(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
