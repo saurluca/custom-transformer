@@ -49,6 +49,7 @@ def save_preprocessed_data(data, save_path):
                 f.write("\n")
     else:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        save_preprocessed_data(data=data,save_path=save_path)
         
 
 def load_preprocessed_data(file_path):
