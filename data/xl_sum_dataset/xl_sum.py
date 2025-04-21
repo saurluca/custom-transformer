@@ -6,7 +6,7 @@ from transformers import AutoTokenizer
 import os
 from tqdm import tqdm
 
-def preprocess_dataset(split, tokenizer, max_length=100):
+def preprocess_dataset_xl_sum(split, tokenizer, max_length=100):
     """
     Preprocess the WMT14 dataset for training.
 
@@ -18,7 +18,7 @@ def preprocess_dataset(split, tokenizer, max_length=100):
     Returns:
         List of tokenized input-output pairs.
     """
-    # Load the WMT14 dataset
+    # Load the xl-sum dataset
     dataset =load_dataset("csebuetnlp/xlsum",name='english', split = split)
 
     tokenized_data = []
@@ -35,7 +35,7 @@ def preprocess_dataset(split, tokenizer, max_length=100):
 
     return tokenized_data
 
-def save_preprocessed_data(data, save_path):
+def save_preprocessed_data_xl_sum(data, save_path):
     """
     Save preprocessed data to a JSON file.
 
@@ -51,7 +51,7 @@ def save_preprocessed_data(data, save_path):
             json.dump({"src": src_tokens, "tgt": tgt_tokens}, f)
             f.write("\n")
 
-def load_preprocessed_data(file_path, lines):
+def load_preprocessed_data_xl_sum(file_path, lines):
     """
     Load preprocessed data from a JSON file.
 
@@ -68,7 +68,7 @@ def load_preprocessed_data(file_path, lines):
             data.append((example["src"], example["tgt"]))
     return data
 
-def prepare_dataloader(data, batch_size=32, max_length=50):
+def prepare_dataloader_xl_sum(data, batch_size=32, max_length=50):
     """
     Prepare a DataLoader for training.
 
@@ -103,18 +103,18 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
 
     return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-def count_json_lines(file_path):
+def count_json_lines_xl_sum(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         return sum(1 for _ in f)
 
-def load_or_preprocess_wmt14_data(
+def load_or_preprocess_xl_sum_data(
     split,
     tokenizer,
     dataset_dir,
     max_length=100,
 ):
     """
-    Load preprocessed WMT14 data if it exists, otherwise preprocess and save it.
+    Load preprocessed xl-sum data if it exists, otherwise preprocess and save it.
 
     Args:
         split (str): Dataset split to load or preprocess (e.g., "train", "validation", "test[:5%]").
@@ -133,15 +133,15 @@ def load_or_preprocess_wmt14_data(
     # Check if the preprocessed data exists
     if os.path.exists(file_path):
         print(f"Loading preprocessed XL-sum data from {file_path}...")
-        num_lines = count_json_lines(file_path)
-        return load_preprocessed_data(file_path, lines=num_lines)
+        num_lines = count_json_lines_xl_sum(file_path)
+        return load_preprocessed_data_xl_sum(file_path, lines=num_lines)
 
     # If not, preprocess the data
     print(f"Preprocessing XL-sum dataset ({split}) for summarization...")
-    data = preprocess_dataset(split, tokenizer, max_length)
+    data = preprocess_dataset_xl_sum(split, tokenizer, max_length)
 
     # Save the preprocessed data
-    save_preprocessed_data(data, file_path)
+    save_preprocessed_data_xl_sum(data, file_path)
     print(f"Preprocessed WMT14 data saved to {file_path}.")
 
     return data
