@@ -12,7 +12,9 @@ def translate_lstm(model, input_text, tokenizer, device, max_length=50):
         max_length: The maximum length of the generated sequence.
 
     Returns:
-        A string representing the translated sequence.
+        A tuple containing:
+            - A list of token indices representing the translated sequence.
+            - A string representing the translated sequence.
     """
     model.eval()  # Set the model to evaluation mode
 
@@ -42,7 +44,7 @@ def translate_lstm(model, input_text, tokenizer, device, max_length=50):
 
     # Decode the translated tokens back to text
     translated_text = tokenizer.decode(translated_tokens)
-    return translated_text
+    return translated_tokens, translated_text
 
 
 def translate_decoder_only(model, input_text, tokenizer, device, max_length=50):
@@ -57,7 +59,9 @@ def translate_decoder_only(model, input_text, tokenizer, device, max_length=50):
         max_length: The maximum length of the generated sequence.
 
     Returns:
-        A string representing the translated sequence.
+        A tuple containing:
+            - A list of token indices representing the translated sequence.
+            - A string representing the translated sequence.
     """
     model.eval()  # Set the model to evaluation mode
 
@@ -86,7 +90,7 @@ def translate_decoder_only(model, input_text, tokenizer, device, max_length=50):
 
     # Decode the generated tokens back to text
     translated_text = tokenizer.decode(generated_tokens)
-    return translated_text
+    return generated_tokens, translated_text
 
 
 def translate_encoder_decoder(model, input_text, tokenizer, device, max_length=50):
@@ -101,7 +105,9 @@ def translate_encoder_decoder(model, input_text, tokenizer, device, max_length=5
         max_length: The maximum length of the generated sequence.
 
     Returns:
-        A string representing the translated sequence.
+        A tuple containing:
+            - A list of token indices representing the translated sequence.
+            - A string representing the translated sequence.
     """
     model.eval()  # Set the model to evaluation mode
 
@@ -141,4 +147,29 @@ def translate_encoder_decoder(model, input_text, tokenizer, device, max_length=5
 
     # Decode the generated tokens back to text
     translated_text = tokenizer.decode(generated_tokens)
-    return translated_text
+    return generated_tokens, translated_text
+
+
+def translate(model, model_type, input_text, tokenizer, device, max_length=50):
+    """
+    Translate a sequence using the specified model type.
+
+    Args:
+        model: The translation model (LSTM, decoder-only Transformer, or encoder-decoder Transformer).
+        model_type (str): The type of the model ("lstm", "decoder-only", "encoder-decoder").
+        input_text (str): The input text to translate.
+        tokenizer: An instance of WordTokenizer or AutoTokenizer.
+        device (str): The device to run the model on (e.g., 'cpu' or 'cuda').
+        max_length (int): The maximum length of the generated sequence.
+
+    Returns:
+        str: The translated sequence as a string.
+    """
+    if model_type == "lstm":
+        return translate_lstm(model, input_text, tokenizer, device, max_length)
+    elif model_type == "decoder-only":
+        return translate_decoder_only(model, input_text, tokenizer, device, max_length)
+    elif model_type == "encoder-decoder":
+        return translate_encoder_decoder(model, input_text, tokenizer, device, max_length)
+    else:
+        raise ValueError(f"Unsupported model type: {model_type}")

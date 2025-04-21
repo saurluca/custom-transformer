@@ -3,16 +3,18 @@ import json
 from datasets import load_dataset
 from torch.utils.data import DataLoader, TensorDataset
 from transformers import AutoTokenizer
-import os 
-from tqdm import tqdm 
+import os
+from tqdm import tqdm
 
-def preprocess_wmt14(split, tokenizer, max_length=50):
+def preprocess_wmt14(split, tokenizer, source_lang="en", target_lang="de", max_length=100):
     """
     Preprocess the WMT14 dataset for training.
 
     Args:
         split (str): Dataset split to preprocess ("train", "validation", "test").
         tokenizer: Tokenizer instance for tokenizing text.
+        source_lang (str): Source language code (e.g., "en").
+        target_lang (str): Target language code (e.g., "de").
         max_length (int): Maximum sequence length.
 
     Returns:
@@ -23,9 +25,9 @@ def preprocess_wmt14(split, tokenizer, max_length=50):
 
     tokenized_data = []
     for example in tqdm(dataset, desc=f"Preprocessing {split} split"):
-        # Extract English and German sentences
-        src_text = example["translation"]["en"]
-        tgt_text = example["translation"]["de"]
+        # Extract source and target sentences dynamically
+        src_text = example["translation"][source_lang]
+        tgt_text = example["translation"][target_lang]
 
         # Tokenize and truncate
         src_tokens = tokenizer.encode(src_text, truncation=True, max_length=max_length)
@@ -45,7 +47,7 @@ def save_preprocessed_data(data, save_path):
     """
     directory = os.path.dirname(save_path)
     if not os.path.isdir(directory):
-        os.makedirs(directory,exist_ok=True)
+        os.makedirs(directory, exist_ok=True)
     with open(save_path, "w", encoding="utf-8") as f:
         for src_tokens, tgt_tokens in data:
             json.dump({"src": src_tokens, "tgt": tgt_tokens}, f)
@@ -63,7 +65,7 @@ def load_preprocessed_data(file_path, lines):
     """
     data = []
     with open(file_path, "r", encoding="utf-8") as f:
-        for line in tqdm(f, desc="Loading data" , total=lines):
+        for line in tqdm(f, desc="Loading data", total=lines):
             example = json.loads(line)
             data.append((example["src"], example["tgt"]))
     return data
@@ -81,7 +83,6 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
         DataLoader: PyTorch DataLoader.
     """
     inputs, targets = zip(*data)
-    
 
     # Pad sequences to max_length
     inputs = [seq + [0] * (max_length - len(seq)) for seq in inputs]
@@ -94,21 +95,50 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
     # Create DataLoader
     dataset = TensorDataset(inputs, targets)
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    
-    return tqdm(data_loader, desc='Creating Batches for converting data to tensors') 
+
+    return tqdm(data_loader, desc='Creating Batches for converting data to tensors')
 
 def count_json_lines(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         return sum(1 for _ in f)
 
+def load_or_preprocess_wmt14_data(
+    split,
+    tokenizer,
+    dataset_dir,
+    source_lang="en",
+    target_lang="de",
+    max_length=100,
+):
+    """
+    Load preprocessed WMT14 data if it exists, otherwise preprocess and save it.
 
-# Example usage
-tokenizer_name = "Helsinki-NLP/opus-mt-de-en"
-dataset_file_path = "datasets/wmt14/train.json"
-tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-if not os.path.exists(dataset_file_path):
-    train_data = preprocess_wmt14("train", tokenizer)
-    save_preprocessed_data(train_data, dataset_file_path)
-num = count_json_lines(dataset_file_path)
-train_data = load_preprocessed_data(dataset_file_path , lines = num)
-train_loader = prepare_dataloader(train_data)
+    Args:
+        split (str): Dataset split to load or preprocess (e.g., "train", "validation", "test[:5%]").
+        tokenizer: Tokenizer instance for tokenizing text.
+        dataset_dir (str): Directory to save or load preprocessed data.
+        source_lang (str): Source language code (e.g., "en").
+        target_lang (str): Target language code (e.g., "de").
+        max_length (int): Maximum sequence length.
+
+    Returns:
+        List of tokenized input-output pairs.
+    """
+    # Construct the file path for the preprocessed data
+    file_path = os.path.join(dataset_dir, f"{split}_{source_lang}-{target_lang}.json")
+
+    # Check if the preprocessed data exists
+    if os.path.exists(file_path):
+        print(f"Loading preprocessed WMT14 data from {file_path}...")
+        num_lines = count_json_lines(file_path)
+        return load_preprocessed_data(file_path, lines=num_lines)
+
+    # If not, preprocess the data
+    print(f"Preprocessing WMT14 dataset ({split}) for {source_lang}-{target_lang}...")
+    data = preprocess_wmt14(split, tokenizer, source_lang, target_lang, max_length)
+
+    # Save the preprocessed data
+    save_preprocessed_data(data, file_path)
+    print(f"Preprocessed WMT14 data saved to {file_path}.")
+
+    return data
