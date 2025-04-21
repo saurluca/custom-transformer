@@ -51,7 +51,7 @@ def save_preprocessed_data(data, save_path):
             json.dump({"src": src_tokens, "tgt": tgt_tokens}, f)
             f.write("\n")
 
-def load_preprocessed_data(file_path):
+def load_preprocessed_data(file_path, lines):
     """
     Load preprocessed data from a JSON file.
 
@@ -63,7 +63,7 @@ def load_preprocessed_data(file_path):
     """
     data = []
     with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
+        for line in tqdm(f, desc="Loading data" , total=lines):
             example = json.loads(line)
             data.append((example["src"], example["tgt"]))
     return data
@@ -81,6 +81,7 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
         DataLoader: PyTorch DataLoader.
     """
     inputs, targets = zip(*data)
+    
 
     # Pad sequences to max_length
     inputs = [seq + [0] * (max_length - len(seq)) for seq in inputs]
@@ -92,19 +93,25 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
 
     # Create DataLoader
     dataset = TensorDataset(inputs, targets)
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    
+    return tqdm(data_loader, desc='Creating Batches for converting data to tensors') 
 
-
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
+def count_json_lines(file_path):
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return sum(1 for _ in f)
 
 
 # Example usage
 
-tokenizer = AutoTokenizer.from_pretrained("Helsinki-NLP/opus-mt-de-en")
-if not os.path.exists("datasets/wmt14/train.json"):
+tokenizer_name = "Helsinki-NLP/opus-mt-de-en"
+dataset_file_path = "datasets/wmt14/train.json"
+tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+if not os.path.exists(dataset_file_path):
     train_data = preprocess_wmt14("train", tokenizer)
-    save_preprocessed_data(train_data, "datasets/wmt14/train.json")
-train_data = load_preprocessed_data("datasets/wmt14/train.json")
+    save_preprocessed_data(train_data, dataset_file_path)
+num = count_json_lines(dataset_file_path)
+train_data = load_preprocessed_data(dataset_file_path , lines = num)
 train_loader = prepare_dataloader(train_data)
 # Iterate through the DataLoader
 for batch in train_loader:
