@@ -5,11 +5,10 @@ import json
 import nltk
 import sys
 import certifi
-
-sys.path.append('src')
-
+from transformers import AutoTokenizer
 from LTSM.lstm import LSTMLanguageModel
 from Transformer.transformer import Transformer
+from Summary.summarization import summarize_lstm, summarize_decoder_only, summarize_encoder_decoder, summarize
 from Translation.translator import translate_lstm, translate_decoder_only, translate_encoder_decoder, translate
 from Tokenize.word_prediction import (
     get_texts,
@@ -22,18 +21,22 @@ from Tokenize.word_prediction import (
 )
 from Config.config import cfg
 from Tokenize.word_tokenizer import WordTokenizer
+from data.xl_sum_dataset.xl_sum import preprocess_dataset_xl_sum,save_preprocessed_data_xl_sum,load_preprocessed_data_xl_sum, prepare_dataloader_xl_sum,count_json_lines_xl_sum,load_or_preprocess_xl_sum_data
 from data.wmt14_dataset.wmt14 import preprocess_wmt14, prepare_dataloader
 from Evaluation.bleu_score import calculate_bleu
 
+sys.path.append('src')
 
 def Translator():
     """
     Test the three translation functions using the WMT14 dataset.
     """
     print("\nTesting translation functions...")
-
+    #TODO tokenizer 
     # Load and preprocess the WMT14 dataset
     print("Preprocessing WMT14 dataset...")
+    tokenizer_name = "Helsinki-NLP/opus-mt-de-en"
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     test_data = preprocess_wmt14("test[:5%]", tokenizer)  # Use 5% of the test split for quick testing
     test_loader = prepare_dataloader(test_data, batch_size=1)
 
@@ -90,6 +93,73 @@ def Translator():
         print(f"Encoder-Decoder Transformer Translation: {translated_encoder_decoder}")
 
         print("-" * 50)
+
+def Summarization():
+    """
+    Test the three translation functions using the xl-sum dataset.
+    """
+    print("\nTesting translation functions...")
+    #TODO tokenizer 
+    # Load and preprocess the WMT14 dataset
+    print("Preprocessing xl-sum dataset...")
+    test_data = preprocess_dataset_xl_sum("test[:5%]", tokenizer) 
+    test_loader = prepare_dataloader_xl_sum(test_data, batch_size=1)
+
+    # Extract example input texts
+    example_inputs = []
+    for batch in test_loader:
+        src, tgt = batch
+        example_inputs.append((src.squeeze(0).tolist(), tgt.squeeze(0).tolist()))
+        if len(example_inputs) >= 3:  # Limit to 3 examples for testing
+            break
+
+    # Decode the example inputs for readability
+    example_texts = [tokenizer.decode(src, skip_special_tokens=True) for src, _ in example_inputs]
+    print("Example Input Texts:", example_texts)
+
+    # Initialize models
+    print("Initializing models...")
+    vocab_size = len(tokenizer)
+    embedding_dim = cfg.embedding_dim_lstm
+    hidden_dim = cfg.hidden_dim_lstm
+    num_layers = cfg.num_layers_lstm
+    dropout = cfg.dropout_lstm
+
+    # LSTM Model
+    lstm_model = LSTMLanguageModel(vocab_size, embedding_dim, hidden_dim, num_layers, dropout).to(cfg.device)
+
+    # Decoder-Only Transformer Model
+    decoder_only_model = Transformer(
+        vocab_size, d_model=cfg.d_model, num_heads=cfg.num_heads, num_layers=cfg.num_layers,
+        d_ff=cfg.d_ff, max_seq_length=cfg.max_seq_length, dropout=cfg.dropout
+    ).to(cfg.device)
+
+    # Encoder-Decoder Transformer Model
+    encoder_decoder_model = Transformer(
+        vocab_size, d_model=cfg.d_model, num_heads=cfg.num_heads, num_layers=cfg.num_layers,
+        d_ff=cfg.d_ff, max_seq_length=cfg.max_seq_length, dropout=cfg.dropout
+    ).to(cfg.device)
+
+    # Test translation functions
+    for i, input_text in enumerate(example_texts):
+        print(f"\nExample {i + 1}:")
+        print(f"Input Text: {input_text}")
+
+        # Translate using LSTM
+        
+        translated_lstm = summarize_lstm(lstm_model, input_text, tokenizer, cfg.device, max_length=50)
+        print(f"LSTM Translation: {translated_lstm}")
+
+        # Translate using Decoder-Only Transformer
+        translated_decoder_only = summarize_decoder_only(decoder_only_model, input_text, tokenizer, cfg.device, max_length=50)
+        print(f"Decoder-Only Transformer Translation: {translated_decoder_only}")
+
+        # Translate using Encoder-Decoder Transformer
+        translated_encoder_decoder = summarize_encoder_decoder(encoder_decoder_model, input_text, tokenizer, cfg.device, max_length=50)
+        print(f"Encoder-Decoder Transformer Translation: {translated_encoder_decoder}")
+
+        print("-" * 50)
+
 
 
 def next_word_generator():
@@ -190,13 +260,13 @@ def next_word_generator():
         # save config
         with open("models/config.json", "w") as f:
             json.dump(cfg, f)
-        print("Model, tokenizer, and config saved to models/")    
+        print("Model, tokenizer, and config saved to models")    
 
 
 if __name__ == "__main__":
     if cfg.mode == "next-word-generation":
         next_word_generator()
     if cfg.mode == "summarization":
-        summarization()
+        Summarization()
     if cfg.mode == "translation":
         Translator()
