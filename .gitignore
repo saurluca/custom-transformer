@@ -17,4 +17,8 @@ models/*
 *.lock
 *.pdm-python 
 *.uv
-*.json 
+*.json
+
+
+# prevent python version files 
+*.python-version
