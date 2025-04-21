@@ -91,7 +91,7 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
     )
     targets.extend(
         seq + [0] * (max_length - len(seq))
-        for seq in tqdm(inputs_list, desc="Padding Inputs")
+        for seq in tqdm(targets_list, desc="Padding Inputs")
     )
 
     # Convert to tensors
