@@ -194,7 +194,7 @@ def next_word_generator():
 
 
 if __name__ == "__main__":
-    if cfg.mode == "next-word-generation"
+    if cfg.mode == "next-word-generation":
         next_word_generator()
     if cfg.mode == "summarization":
         summarization()
