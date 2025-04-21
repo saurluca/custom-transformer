@@ -82,11 +82,19 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
     Returns:
         DataLoader: PyTorch DataLoader.
     """
-    inputs, targets = zip(*data)
+    inputs_list, targets_list = zip(*data)
 
-    # Pad sequences to max_length
-    inputs = [seq + [0] * (max_length - len(seq)) for seq in inputs]
-    targets = [seq + [0] * (max_length - len(seq)) for seq in targets]
+    inputs = []
+    targets = []
+
+    inputs.extend(
+        seq + [0] * (max_length - len(seq))
+        for seq in tqdm(inputs_list, desc="Padding Inputs")
+    )
+    targets.extend(
+        seq + [0] * (max_length - len(seq))
+        for seq in tqdm(targets_list, desc="Padding Inputs")
+    )
 
     # Convert to tensors
     inputs = torch.tensor(inputs, dtype=torch.long)
@@ -94,9 +102,8 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
 
     # Create DataLoader
     dataset = TensorDataset(inputs, targets)
-    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    return tqdm(data_loader, desc='Creating Batches for converting data to tensors')
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 def count_json_lines(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
