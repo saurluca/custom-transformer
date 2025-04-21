@@ -26,7 +26,7 @@ from data.wmt14_dataset.wmt14 import preprocess_wmt14, prepare_dataloader
 from Evaluation.bleu_score import calculate_bleu
 
 
-def test_translation_functions(tokenizer, cfg):
+def translation(tokenizer, cfg):
     """
     Test the three translation functions using the WMT14 dataset.
     """
@@ -193,7 +193,7 @@ def main():
         print("Model, tokenizer, and config saved to models/")
 
     # Test translation functions
-    test_translation_functions(tokenizer, cfg)
+    translation(tokenizer, cfg)
 
 
 if __name__ == "__main__":
