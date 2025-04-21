@@ -96,13 +96,16 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
 
     return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
+
+
 # Example usage
+
 tokenizer = AutoTokenizer.from_pretrained("Helsinki-NLP/opus-mt-de-en")
-train_data = preprocess_wmt14("train", tokenizer)
-save_preprocessed_data(train_data, "datasets/wmt14/train.json")
+if not os.path.exists("datasets/wmt14/train.json"):
+    train_data = preprocess_wmt14("train", tokenizer)
+    save_preprocessed_data(train_data, "datasets/wmt14/train.json")
 train_data = load_preprocessed_data("datasets/wmt14/train.json")
 train_loader = prepare_dataloader(train_data)
-
 # Iterate through the DataLoader
 for batch in train_loader:
     inputs, targets = batch
