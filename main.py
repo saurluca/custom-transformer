@@ -4,7 +4,10 @@ from torch.utils.data import DataLoader
 import json
 import nltk
 import sys
+import os
 import certifi
+from huggingface_hub import login
+from dotenv import load_dotenv
 from transformers import AutoTokenizer
 from LTSM.lstm import LSTMLanguageModel
 from Transformer.transformer import Transformer
@@ -25,14 +28,19 @@ from data.xl_sum_dataset.xl_sum import preprocess_dataset_xl_sum,save_preprocess
 from data.wmt14_dataset.wmt14 import preprocess_wmt14, prepare_dataloader
 from Evaluation.bleu_score import calculate_bleu
 
+load_dotenv()
 sys.path.append('src')
+
+if hf_token:=os.getenv("HUGGINGFACE_TOKEN"):
+    login(token=hf_token)
+    print("Your HF account has been successfully logged in!")
 
 def Translator():
     """
     Test the three translation functions using the WMT14 dataset.
     """
     print("\nTesting translation functions...")
-    #TODO tokenizer 
+    
     # Load and preprocess the WMT14 dataset
     print("Preprocessing WMT14 dataset...")
     tokenizer_name = "Helsinki-NLP/opus-mt-de-en"
@@ -99,8 +107,9 @@ def Summarization():
     Test the three translation functions using the xl-sum dataset.
     """
     print("\nTesting translation functions...")
-    #TODO tokenizer 
     # Load and preprocess the WMT14 dataset
+    tokenizer_name = "google/flan-t5-large"
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     print("Preprocessing xl-sum dataset...")
     test_data = preprocess_dataset_xl_sum("test[:5%]", tokenizer) 
     test_loader = prepare_dataloader_xl_sum(test_data, batch_size=1)
@@ -110,7 +119,7 @@ def Summarization():
     for batch in test_loader:
         src, tgt = batch
         example_inputs.append((src.squeeze(0).tolist(), tgt.squeeze(0).tolist()))
-        if len(example_inputs) >= 3:  # Limit to 3 examples for testing
+        if len(example_inputs) >= 5:  # Limit to 3 examples for testing
             break
 
     # Decode the example inputs for readability
@@ -125,6 +134,9 @@ def Summarization():
     num_layers = cfg.num_layers_lstm
     dropout = cfg.dropout_lstm
 
+
+
+    #TODO train the model before testing
     # LSTM Model
     lstm_model = LSTMLanguageModel(vocab_size, embedding_dim, hidden_dim, num_layers, dropout).to(cfg.device)
 
@@ -146,7 +158,6 @@ def Summarization():
         print(f"Input Text: {input_text}")
 
         # Translate using LSTM
-        
         translated_lstm = summarize_lstm(lstm_model, input_text, tokenizer, cfg.device, max_length=50)
         print(f"LSTM Translation: {translated_lstm}")
 
@@ -264,6 +275,7 @@ def next_word_generator():
 
 
 if __name__ == "__main__":
+    
     if cfg.mode == "next-word-generation":
         next_word_generator()
     if cfg.mode == "summarization":
