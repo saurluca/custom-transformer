@@ -56,6 +56,13 @@ cfg.show_top_k = False
 cfg.device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
+# Translation 
+cfg.summarization_tokenizer =  "Helsinki-NLP/opus-mt-de-en"
+
+# Summarization
+
+cfg.summarization_tokenizer =  ""
+
 
 # Select mode:
-cfg.mode = "next-word-generation" # Select the task to perform for model; available tasks: ["next-word-generation", "summarization", "translation"]
+cfg.mode = "translation" # Select the task to perform for model; available tasks: ["next-word-generation", "summarization", "translation"]
