@@ -57,10 +57,9 @@ cfg.device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 # Translation 
-cfg.summarization_tokenizer =  "Helsinki-NLP/opus-mt-de-en"
+cfg.translation_tokenizer =  "Helsinki-NLP/opus-mt-de-en"
 
 # Summarization
-
 cfg.summarization_tokenizer =  ""
 
 

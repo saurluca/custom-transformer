@@ -7,7 +7,7 @@ import sys
 import os
 import certifi
 from huggingface_hub import login
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 from transformers import AutoTokenizer
 from LTSM.lstm import LSTMLanguageModel
 from Transformer.transformer import Transformer
@@ -28,12 +28,12 @@ from data.xl_sum_dataset.xl_sum import preprocess_dataset_xl_sum,save_preprocess
 from data.wmt14_dataset.wmt14 import preprocess_wmt14, prepare_dataloader
 from Evaluation.bleu_score import calculate_bleu
 
-load_dotenv()
+# load_dotenv()
 sys.path.append('src')
 
-if hf_token:=os.getenv("HUGGINGFACE_TOKEN"):
-    login(token=hf_token)
-    print("Your HF account has been successfully logged in!")
+# if hf_token:=os.getenv("HUGGINGFACE_TOKEN"):
+#     login(token=hf_token)
+#     print("Your HF account has been successfully logged in!")
 
 def Translator():
     """
@@ -43,21 +43,27 @@ def Translator():
     
     # Load and preprocess the WMT14 dataset
     print("Preprocessing WMT14 dataset...")
-    tokenizer_name = "Helsinki-NLP/opus-mt-de-en"
+    tokenizer_name = cfg.translation_tokenizer
+    print(f"name of the tokenizer is : {tokenizer_name}")
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     test_data = preprocess_wmt14("test[:5%]", tokenizer)  # Use 5% of the test split for quick testing
-    test_loader = prepare_dataloader(test_data, batch_size=1)
+    test_loader = prepare_dataloader(test_data, batch_size=32)
 
     # Extract example input texts
     example_inputs = []
     for batch in test_loader:
         src, tgt = batch
         example_inputs.append((src.squeeze(0).tolist(), tgt.squeeze(0).tolist()))
-        if len(example_inputs) >= 3:  # Limit to 3 examples for testing
+        if len(example_inputs) >= 3:  
             break
 
+
+
+    print("\n Content of example_inputs: ")
+    for src_list, _ in example_inputs:
+        print(f"Source Token list: {src_list}, Type:{type(src_list)}")
     # Decode the example inputs for readability
-    example_texts = [tokenizer.decode(src, skip_special_tokens=True) for src, _ in example_inputs]
+    example_texts = [tokenizer.decode(src_list, skip_special_tokens=True) for src_list, _ in example_inputs]
     print("Example Input Texts:", example_texts)
 
     # Initialize models
@@ -99,8 +105,29 @@ def Translator():
         # Translate using Encoder-Decoder Transformer
         translated_encoder_decoder = translate_encoder_decoder(encoder_decoder_model, input_text, tokenizer, cfg.device, max_length=50)
         print(f"Encoder-Decoder Transformer Translation: {translated_encoder_decoder}")
+        
+    if cfg.save_model:
+        print("Saving model...")
+    # save model
+    try : 
+        torch.save(model.state_dict(), "models/model_translation.pth")
+        print("The model has been saved successfully!")
+    except Exception as e :
+        print(f"failed with the error message: {e}") 
+    # save tokenizer
+    try :
+        torch.save(tokenizer, "models/tokenizer_translation.pth")
+        print("The tokenizer has been saved successfully!")
+    except Exception as e:
+        print(f"failed with the error message: {e}")
+    
+    # save config
+    with open("models/config_translation.json", "w") as f:
+        json.dump(cfg, f)
+    print("Model, tokenizer, and config saved to models")    
 
-        print("-" * 50)
+
+    print("-" * 50)
 
 def Summarization():
     """
@@ -168,6 +195,26 @@ def Summarization():
         # Translate using Encoder-Decoder Transformer
         translated_encoder_decoder = summarize_encoder_decoder(encoder_decoder_model, input_text, tokenizer, cfg.device, max_length=50)
         print(f"Encoder-Decoder Transformer Translation: {translated_encoder_decoder}")
+
+    if cfg.save_model:
+        print("Saving model...")
+        # save model
+        try : 
+            torch.save(model.state_dict(), "models/model_summarization.pth")
+            print("The model has been saved successfully!")
+        except Exception as e :
+            print(f"failed with the error message: {e}") 
+        # save tokenizer
+        try :
+            torch.save(tokenizer, "models/tokenizer_summarization.pth")
+            print("The tokenizer has been saved successfully!")
+        except Exception as e:
+            print(f"failed with the error message: {e}")
+        
+        # save config
+        with open("models/config_summarization.json", "w") as f:
+            json.dump(cfg, f)
+        print("Model, tokenizer, and config saved to models")    
 
         print("-" * 50)
 
@@ -257,19 +304,19 @@ def next_word_generator():
         print("Saving model...")
         # save model
         try : 
-            torch.save(model.state_dict(), "models/model.pth")
+            torch.save(model.state_dict(), "models/model_next_word_generator.pth")
             print("The model has been saved successfully!")
         except Exception as e :
             print(f"failed with the error message: {e}") 
         # save tokenizer
         try :
-            torch.save(tokenizer, "models/tokenizer.pth")
+            torch.save(tokenizer, "models/tokenizer_next_word_generator.pth")
             print("The tokenizer has been saved successfully!")
         except Exception as e:
             print(f"failed with the error message: {e}")
         
         # save config
-        with open("models/config.json", "w") as f:
+        with open("models/config_next_word_generator.json", "w") as f:
             json.dump(cfg, f)
         print("Model, tokenizer, and config saved to models")    
 
