@@ -11,6 +11,23 @@ cfg.example_prompts = ["The man who", "The thing that", "I love "]
 # data
 cfg.text_names = [
     "gutenberg-austen-emma.txt",
+    "gutenberg-austen-persuasion.txt",
+    "gutenberg-austen-sense.txt",
+    "gutenberg-bible-kjv.txt",
+    "gutenberg-blake-poems.txt",
+    "gutenberg-bryant-stories.txt",
+    "gutenberg-burgess-busterbrown.txt",
+    "gutenberg-carroll-alice.txt",
+    "gutenberg-chesterton-ball.txt",
+    "gutenberg-chesterton-brown.txt",   
+    "gutenberg-chesterton-thursday.txt",
+    "gutenberg-edgeworth-parents.txt",
+    "gutenberg-melville-moby_dick.txt",
+    "gutenberg-milton-paradise.txt",
+    "gutenberg-shakespeare-caesar.txt",
+    "gutenberg-shakespeare-hamlet.txt",
+    "gutenberg-shakespeare-macbeth.txt",
+    "gutenberg-whitman-leaves.txt",
     # "webtext-grail.txt",
 ]  # "webtext-overheard.txt", "gutenberg-austen-emma.txt"
 cfg.max_chars_per_text = 20000  # Limit each text to num of characters
@@ -64,4 +81,4 @@ cfg.summarization_tokenizer =  ""
 
 
 # Select mode:
-cfg.mode = "translation" # Select the task to perform for model; available tasks: ["next-word-generation", "summarization", "translation"]
+cfg.mode = "next-word-generation" # Select the task to perform for model; available tasks: ["next-word-generation", "summarization", "translation"]
