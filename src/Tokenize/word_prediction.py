@@ -12,7 +12,7 @@ from typing import List, Tuple
 sys.path.append("sys")
 
 from Transformer.transformer import Transformer, TransformerDecoder
-from LTSM.lstm import LSTMLanguageModel
+from LSTM.lstm import LSTMLanguageModel
 from Summary.summarization import summarize_encoder_decoder
 
 
@@ -145,10 +145,15 @@ def train_one_epoch(
         # Move data to device
         inputs = inputs.to(device)
         targets = targets.to(device)
-
-        # Create masks for transformer models
-        if model_type in ["transformer", "decoder_only"]:
-            # Create attention masks
+        
+        # Forward pass based on model type
+        optimizer.zero_grad()
+        
+        if model_type == "lstm":
+            # LSTM model only takes input and returns output and hidden state
+            outputs, _ = model(inputs)
+        elif model_type in ["transformer", "decoder_only"]:
+            # Create attention masks for transformer models
             src_seq_len = inputs.size(1)
             tgt_seq_len = targets.size(1)
 
@@ -163,21 +168,10 @@ def train_one_epoch(
 
             # Cross attention mask (allows decoder to attend to all encoder positions)
             if model_type == "transformer":
-                cross_mask = torch.ones(
-                    (tgt_seq_len, src_seq_len), device=device
-                ).bool()
-            else:
-                cross_mask = None
-
-        # Forward pass
-        optimizer.zero_grad()
-
-        if model_type == "lstm":
-            outputs, _ = model(inputs)
-        elif model_type == "transformer":
-            outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
-        elif model_type == "decoder_only":
-            outputs = model(inputs, targets, src_mask, tgt_mask)
+                cross_mask = torch.ones((tgt_seq_len, src_seq_len), device=device).bool()
+                outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
+            else:  # decoder_only
+                outputs = model(inputs, tgt_mask)
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
@@ -248,10 +242,13 @@ def evaluate_model(model, test_loader, criterion, device, model_type="lstm"):
             # Move data to device
             inputs = inputs.to(device)
             targets = targets.to(device)
-
-            # Create masks for transformer models
-            if model_type in ["transformer", "decoder_only"]:
-                # Create attention masks
+            
+            # Forward pass based on model type
+            if model_type == "lstm":
+                # LSTM model only takes input and returns output and hidden state
+                outputs, _ = model(inputs)
+            elif model_type in ["transformer", "decoder_only"]:
+                # Create attention masks for transformer models
                 src_seq_len = inputs.size(1)
                 tgt_seq_len = targets.size(1)
 
@@ -266,19 +263,10 @@ def evaluate_model(model, test_loader, criterion, device, model_type="lstm"):
 
                 # Cross attention mask (allows decoder to attend to all encoder positions)
                 if model_type == "transformer":
-                    cross_mask = torch.ones(
-                        (tgt_seq_len, src_seq_len), device=device
-                    ).bool()
-                else:
-                    cross_mask = None
-
-            # Forward pass
-            if model_type == "lstm":
-                outputs, _ = model(inputs)
-            elif model_type == "transformer":
-                outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
-            elif model_type == "decoder_only":
-                outputs = model(inputs, targets, src_mask, tgt_mask)
+                    cross_mask = torch.ones((tgt_seq_len, src_seq_len), device=device).bool()
+                    outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
+                else:  # decoder_only
+                    outputs = model(inputs, tgt_mask)
             else:
                 raise ValueError(f"Unknown model type: {model_type}")
 
@@ -311,12 +299,28 @@ def train_model(
     train_losses = []
     test_losses = []
 
+    # Determine model type from the model class
+    if isinstance(model, LSTMLanguageModel):
+        model_type = "lstm"
+    elif isinstance(model, Transformer):
+        # Check if it's a decoder-only model by looking at the forward method signature
+        import inspect
+        sig = inspect.signature(model.forward)
+        if len(sig.parameters) == 2:  # Only takes input and mask
+            model_type = "decoder_only"
+        else:
+            model_type = "transformer"
+    else:
+        model_type = cfg.model_type  # Fallback to config
+
+    print(f"Training model type: {model_type}")
+
     for epoch in range(cfg.num_epochs):
         train_loss = train_one_epoch(
-            model, train_loader, criterion, optimizer, cfg.device, cfg.model_type
+            model, train_loader, criterion, optimizer, cfg.device, model_type
         )
         test_loss = evaluate_model(
-            model, test_loader, criterion, cfg.device, cfg.model_type
+            model, test_loader, criterion, cfg.device, model_type
         )
 
         train_losses.append(train_loss)
@@ -339,14 +343,16 @@ def train_model(
                     inputs[0].tolist(), skip_special_tokens=True
                 )
                 print(f"Input Text: {input_text}")
-
-                # Generate summary using encoder-decoder model
-                _, generated_summary = summarize_encoder_decoder(
+                
+                # Generate summary using the appropriate model type
+                from Summary.summarization import summarize
+                _, generated_summary = summarize(
                     model,
                     input_text,
                     tokenizer,
                     cfg.device,
-                    max_length=cfg.output_length,
+                    model_type=model_type,
+                    max_length=cfg.output_length
                 )
                 print(f"Generated Summary: {generated_summary}")
                 print("-" * 50)
@@ -438,35 +444,21 @@ def generate_text(
 
             next_token_logits = output[:, -1, :] / temperature
 
-            # Set probability of <unk> token to 0 to prevent sampling it
-            if hasattr(tokenizer, "use_pretrained") and not tokenizer.use_pretrained:
+            # Set probability of token to 0 to prevent sampling it
+            if hasattr(tokenizer, 'use_pretrained') and not tokenizer.use_pretrained:
                 unk_idx = tokenizer.vocab["<unk>"]
-                next_token_logits[0, unk_idx] = float(
-                    "-inf"
-                )  # Set to negative infinity
+                next_token_logits[0, unk_idx] = float("-inf")  # Set to negative infinity
 
-            # Sample from the distribution
-            probs = torch.softmax(next_token_logits, dim=-1)
-            next_token = sample_next_token(probs, sampling_strategy, top_k, top_p)
+                # Sample from the distribution
+                probs = F.softmax(next_token_logits, dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)
 
-            if show_top_k:
-                # print the input sentence
-                print(f"Input: {tokenizer.decode(tokens[0].tolist())}")
-                # Get top k most likely next tokens
-                top_probs, top_indices = torch.topk(probs[0], top_k)
-                print("\nTop 5 most likely next words:")
-                for prob, idx in zip(top_probs, top_indices):
-                    word = tokenizer.idx2word[idx.item()]
-                    print(f"  {word}: {prob.item():.4f}")
+                if show_top_k:
+                    top_k_values, top_k_indices = torch.topk(probs, k=top_k, dim=-1)
+                    top_k_tokens = [tokenizer.decode([idx.item()]) for idx in top_k_indices[0]]
+                    print(f"Top {top_k} tokens: {top_k_tokens}")
 
-                # Print the selected word and its probability
-                selected_word = tokenizer.idx2word[next_token.item()]
-                selected_prob = probs[0, next_token.item()].item()
-                print(
-                    f"\nSelected word: {selected_word} (probability: {selected_prob:.4f})"
-                )
-                print()
-
+            
             # Stop if we predict the end token or reach max sequence length
             if hasattr(tokenizer, "use_pretrained") and tokenizer.use_pretrained:
                 # For BERT tokenizer, check for [SEP] token
@@ -476,9 +468,9 @@ def generate_text(
                 ):
                     break
             else:
-                # For custom tokenizer, check for </s> token
+                # For custom tokenizer, check for end token
                 if (
-                    next_token.item() == tokenizer.vocab["</s>"]
+                    next_token.item() == tokenizer.vocab["[END]"]
                     or tokens.size(1) >= seq_length
                 ):
                     break

@@ -9,8 +9,12 @@ import certifi
 from huggingface_hub import login
 
 # from dotenv import load_dotenv
-from transformers import AutoTokenizer
-from LTSM.lstm import LSTMLanguageModel
+from transformers import AutoTokenizer, BartForConditionalGeneration
+
+# Add src directory to Python path
+sys.path.append('src')
+
+from LSTM.lstm import LSTMLanguageModel
 from Transformer.transformer import Transformer
 from Summary.summarization import (
     summarize_lstm,
@@ -46,10 +50,9 @@ from data.xl_sum_dataset.xl_sum import (
 )
 from data.wmt14_dataset.wmt14 import preprocess_wmt14, prepare_dataloader
 from Evaluation.bleu_score import calculate_bleu
+from Evaluation.rouge_score import calculate_rouge_scores, plot_rouge_scores
 
 # load_dotenv()
-sys.path.append("src")
-
 # if hf_token:=os.getenv("HUGGINGFACE_TOKEN"):
 #     login(token=hf_token)
 #     print("Your HF account has been successfully logged in!")
@@ -196,19 +199,35 @@ def Summarization():
 
     # Prepare dataloaders
     print("Preparing dataloaders...")
-    train_loader = prepare_dataloader_xl_sum(
-        train_data, batch_size=cfg.batch_size, max_length=cfg.max_seq_length
-    )
-    test_loader = prepare_dataloader_xl_sum(
-        test_data, batch_size=cfg.batch_size, max_length=cfg.max_seq_length
-    )
-
-    # Initialize model
-    print("Initializing encoder-decoder Transformer model...")
+    train_loader = prepare_dataloader_xl_sum(train_data, batch_size=cfg.batch_size, max_length=cfg.max_seq_length)
+    test_loader = prepare_dataloader_xl_sum(test_data, batch_size=cfg.batch_size, max_length=cfg.max_seq_length)
+    
+    # Initialize models
+    print("Initializing models...")
     vocab_size = len(tokenizer)
-
+    
+    # LSTM Model
+    lstm_model = LSTMLanguageModel(
+        vocab_size=vocab_size,
+        embedding_dim=cfg.embedding_dim_lstm,
+        hidden_dim=cfg.hidden_dim_lstm,
+        num_layers=cfg.num_layers_lstm,
+        dropout=cfg.dropout_lstm,
+    ).to(cfg.device)
+    
+    # Decoder-Only Transformer Model
+    decoder_only_model = Transformer(
+        vocab_size=vocab_size,
+        d_model=cfg.d_model,
+        num_heads=cfg.num_heads,
+        num_layers=cfg.num_layers,
+        d_ff=cfg.d_ff,
+        max_seq_length=cfg.max_seq_length,
+        dropout=cfg.dropout
+    ).to(cfg.device)
+    
     # Encoder-Decoder Transformer Model
-    model = Transformer(
+    encoder_decoder_model = Transformer(
         vocab_size=vocab_size,
         d_model=cfg.d_model,
         num_heads=cfg.num_heads,
@@ -220,31 +239,133 @@ def Summarization():
 
     # Initialize loss function and optimizer
     criterion = init_loss_fn(cfg.loss_fn)
-    optimizer = optim.Adam(
-        model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay
+    
+    # Train models
+    print("Training models...")
+    
+    # Train LSTM model
+    print("\nTraining LSTM model...")
+    lstm_optimizer = optim.Adam(lstm_model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
+    lstm_train_losses, lstm_test_losses = train_model(
+        lstm_model, train_loader, test_loader, tokenizer, lstm_optimizer, criterion, cfg
     )
-
-    # Train model
-    print("Training Encoder-Decoder Transformer model...")
-    train_losses, test_losses = train_model(
-        model, train_loader, test_loader, tokenizer, optimizer, criterion, cfg
+    
+    # Train Decoder-Only model
+    print("\nTraining Decoder-Only model...")
+    decoder_optimizer = optim.Adam(decoder_only_model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
+    decoder_train_losses, decoder_test_losses = train_model(
+        decoder_only_model, train_loader, test_loader, tokenizer, decoder_optimizer, criterion, cfg
+    )
+    
+    # Train Encoder-Decoder model
+    print("\nTraining Encoder-Decoder model...")
+    encoder_decoder_optimizer = optim.Adam(encoder_decoder_model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
+    encoder_decoder_train_losses, encoder_decoder_test_losses = train_model(
+        encoder_decoder_model, train_loader, test_loader, tokenizer, encoder_decoder_optimizer, criterion, cfg
     )
 
     # Plot loss curves
     print("Plotting loss curves...")
-    plot_loss(
-        train_losses, test_losses, save_path="plots/transformer_summarization_loss.png"
-    )
-
-    # Save model if configured
+    plot_loss(lstm_train_losses, lstm_test_losses, save_path="plots/lstm_summarization_loss.png")
+    plot_loss(decoder_train_losses, decoder_test_losses, save_path="plots/decoder_only_summarization_loss.png")
+    plot_loss(encoder_decoder_train_losses, encoder_decoder_test_losses, save_path="plots/encoder_decoder_summarization_loss.png")
+    
+    # Test summarization on example texts
+    print("\nTesting summarization on example texts...")
+    example_texts = [
+        "The quick brown fox jumps over the lazy dog. This classic pangram contains every letter of the English alphabet at least once. Pangrams have been used to display typefaces and test equipment since the invention of printing.",
+        "Artificial intelligence has transformed various sectors including healthcare, finance, and transportation. Machine learning algorithms can now diagnose diseases, predict market trends, and drive autonomous vehicles. However, concerns about AI ethics and safety continue to grow.",
+        "Climate change poses significant challenges to global ecosystems. Rising temperatures, extreme weather events, and sea level rise threaten both human communities and wildlife. Scientists emphasize the need for immediate action to reduce greenhouse gas emissions."
+    ]
+    
+    # Get ground truth summaries from the test set
+    print("\nGetting ground truth summaries from test set...")
+    ground_truth_summaries = []
+    for batch in test_loader:
+        if isinstance(batch, (list, tuple)):
+            src, tgt = batch
+        else:
+            src = batch['input_ids']
+            tgt = batch['labels']
+            
+        # Convert tensors to lists and filter out padding tokens (0)
+        src_tokens = [token for token in src[0].tolist() if token != 0]
+        tgt_tokens = [token for token in tgt[0].tolist() if token != 0]
+        
+        # Convert lists to tensors for decoding
+        src_tensor = torch.tensor(src_tokens)
+        tgt_tensor = torch.tensor(tgt_tokens)
+        
+        # Decode the tokens to text
+        src_text = tokenizer.decode(src_tensor, skip_special_tokens=True)
+        tgt_text = tokenizer.decode(tgt_tensor, skip_special_tokens=True)
+        
+        ground_truth_summaries.append(tgt_text)
+        
+        if len(ground_truth_summaries) >= len(example_texts):
+            break
+    
+    # Generate summaries for each model type and calculate ROUGE scores
+    model_types = ["lstm", "decoder_only", "encoder_decoder"]
+    models = {
+        "lstm": lstm_model,
+        "decoder_only": decoder_only_model,
+        "encoder_decoder": encoder_decoder_model
+    }
+    
+    all_rouge_scores = {}
+    
+    for model_type in model_types:
+        print(f"\nGenerating summaries using {model_type} model...")
+        generated_summaries = []
+        
+        for i, text in enumerate(example_texts):
+            print(f"\nExample {i + 1}:")
+            print(f"Input text: {text[:100]}...")
+            
+            # Generate summary using the current model
+            _, summary = summarize(models[model_type], text, tokenizer, cfg.device, model_type=model_type)
+            
+            if summary:
+                print(f"Generated summary: {summary}")
+                generated_summaries.append(summary)
+            else:
+                print("Failed to generate summary")
+                generated_summaries.append("")  # Add empty string for failed summaries
+        
+        # Calculate and plot ROUGE scores for this model
+        print(f"\nCalculating ROUGE scores for {model_type} model...")
+        rouge_scores = calculate_rouge_scores(generated_summaries, ground_truth_summaries)
+        all_rouge_scores[model_type] = rouge_scores
+        
+        print(f"\nROUGE Scores for {model_type} model:")
+        for metric, score in rouge_scores.items():
+            print(f"{metric}: {score:.4f}")
+        
+        # Plot ROUGE scores for this model
+        plot_rouge_scores(rouge_scores, save_path=f"plots/rouge_scores_{model_type}.png")
+    
+    # Plot comparison of ROUGE scores across models
+    print("\nPlotting comparison of ROUGE scores across models...")
+    # This would require modifying the plot_rouge_scores function to handle multiple models
+    # For now, we'll just print the comparison
+    print("\nROUGE Score Comparison:")
+    print("Model Type | ROUGE-1 | ROUGE-2 | ROUGE-L")
+    print("-" * 40)
+    for model_type, scores in all_rouge_scores.items():
+        print(f"{model_type:12} | {scores['rouge1']:.4f} | {scores['rouge2']:.4f} | {scores['rougeL']:.4f}")
+    
+    # Save models if configured
     if cfg.save_model:
-        print("Saving model...")
+        print("\nSaving models...")
         try:
-            torch.save(model.state_dict(), "models/transformer_summarization.pth")
-            print("Model saved successfully!")
+            torch.save(lstm_model.state_dict(), "models/lstm_summarization.pth")
+            torch.save(decoder_only_model.state_dict(), "models/decoder_only_summarization.pth")
+            torch.save(encoder_decoder_model.state_dict(), "models/encoder_decoder_summarization.pth")
+            print("Models saved successfully!")
         except Exception as e:
-            print(f"Failed to save model with error: {e}")
-
+            print(f"Failed to save models with error: {e}")
+        
         # Save tokenizer
         try:
             tokenizer.save_pretrained("models/summarization_tokenizer")
@@ -255,64 +376,7 @@ def Summarization():
         # Save config
         with open("models/config_summarization.json", "w") as f:
             json.dump(cfg.__dict__, f)
-        print("Config saved to models/config_summarization.json")
-
-    # Test summarization on example texts
-    print("\nTesting summarization on example texts...")
-
-    # Get a few examples from the test set
-    example_inputs = []
-    for batch in test_loader:
-        src, tgt = batch
-        # Convert tensors to lists directly using PyTorch
-        src_list = src.squeeze(0).cpu().tolist()
-        tgt_list = tgt.squeeze(0).cpu().tolist()
-        example_inputs.append((src_list, tgt_list))
-        if len(example_inputs) >= 3:  # Limit to 3 examples for testing
-            break
-
-    # Decode the example inputs for readability
-    example_texts = []
-    example_summaries = []
-    for src, tgt in example_inputs:
-        # Filter out padding tokens (0)
-        src_tokens = [t for t in src if t != 0]
-        tgt_tokens = [t for t in tgt if t != 0]
-
-        # Convert token IDs to strings one at a time
-        src_text = tokenizer.convert_tokens_to_string(
-            [tokenizer.convert_ids_to_tokens(t) for t in src_tokens]
-        )
-        tgt_text = tokenizer.convert_tokens_to_string(
-            [tokenizer.convert_ids_to_tokens(t) for t in tgt_tokens]
-        )
-
-        example_texts.append(src_text)
-        example_summaries.append(tgt_text)
-
-    print("\nExample Input Texts and Ground Truth Summaries:")
-    for i, (text, summary) in enumerate(zip(example_texts, example_summaries)):
-        print(f"\nExample {i + 1}:")
-        print(f"Input Text: {text}")
-        print(f"Ground Truth Summary: {summary}")
-
-    # Test summarization with the model
-    print("\nTesting summarization with Encoder-Decoder Transformer:")
-    for i, input_text in enumerate(example_texts):
-        print(f"\nExample {i + 1}:")
-        print(f"Input Text: {input_text}")
-
-        # Summarize using Encoder-Decoder Transformer
-        _, generated_summary = summarize_encoder_decoder(
-            model, input_text, tokenizer, cfg.device, max_length=50
-        )
-        print(f"Generated Summary: {generated_summary}")
-
-        # Calculate BLEU score
-        bleu_score = calculate_bleu([generated_summary], [example_summaries[i]])
-        print(f"BLEU Score: {bleu_score:.4f}")
-
-    print("-" * 50)
+        print("Config saved successfully!")
 
 
 def next_word_generator():

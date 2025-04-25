@@ -16,7 +16,8 @@ dependencies = [
     "torch",
     "transformers>=4.0.0",
     "fsspec>=2023.1.0",
-    "datasets>=2.0.0"]
+    "datasets>=2.0.0", 
+    "rouge-score"]
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"

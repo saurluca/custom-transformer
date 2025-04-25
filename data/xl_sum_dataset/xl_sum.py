@@ -25,7 +25,7 @@ def preprocess_dataset_xl_sum(split, tokenizer, max_length=100):
     tokenized_data = []
     for example in tqdm(dataset, desc=f"Preprocessing {split} split"):
         # Extract source and target sentences dynamically
-        src_text = example["title"]
+        src_text = example["text"]
         tgt_text = example["summary"]
 
         # Tokenize
