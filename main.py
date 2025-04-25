@@ -7,6 +7,9 @@ import sys
 import os
 import certifi
 from huggingface_hub import login
+import matplotlib.pyplot as plt
+import numpy as np
+from tqdm import tqdm
 
 # from dotenv import load_dotenv
 from transformers import AutoTokenizer, BartForConditionalGeneration
@@ -478,6 +481,362 @@ def next_word_generator():
         with open("models/config_next_word_generator.json", "w") as f:
             json.dump(cfg, f)
         print("Model, tokenizer, and config saved to models")
+
+
+def evaluate_reconstruction(
+    model,
+    tokenizer,
+    text,
+    mask_ratio=0.3,
+    device="cpu",
+    num_sequences=100,
+):
+    """
+    Evaluate how well the model can reconstruct a text by masking part of the sequences
+    and measuring the model's predictions against the original tokens.
+
+    Args:
+        model: Trained model
+        tokenizer: Tokenizer used to convert text to sequences
+        text: Text to evaluate on
+        mask_ratio: Proportion of sequence to mask for prediction
+        device: Device to run the model on
+
+    Returns:
+        Dictionary with ROUGE and BLEU scores
+    """
+    # only use the percnetage of text_ratio of the text
+    print(f"Evaluating reconstruction on text of length {len(text)}")
+    model.eval()
+
+    # filter for the text_len
+    print("Creating sequences...")
+    # Create sequences from the text
+    sequences = prepare_sequences([text], tokenizer, seq_length=cfg.seq_length)
+    sequences = sequences[:num_sequences]
+    print("Initializing scorers...")
+    # Initialize scorers
+    rouge = rouge_scorer.RougeScorer(["rouge1", "rouge2", "rougeL"], use_stemmer=True)
+    smoother = SmoothingFunction().method1
+
+    # Store scores
+    rouge_scores = {"rouge1": [], "rouge2": [], "rougeL": []}
+    bleu_scores = []
+
+    print("Evaluating...")
+    with torch.no_grad():
+        for sequence in tqdm(sequences):
+            input_seq = sequence[:-1].unsqueeze(0).to(device)
+            target_seq = sequence[1:].unsqueeze(0).to(device)
+
+            # Determine how many tokens to mask
+            seq_len = input_seq.size(1)
+            mask_len = int(seq_len * mask_ratio)
+            visible_len = seq_len - mask_len
+
+            # Keep only the visible part of the sequence
+            partial_input = input_seq[:, :visible_len]
+
+            # Generate the entire sequence from the partial input
+            if cfg.model_type == "lstm":
+                outputs, _ = model(partial_input)
+                # Get the predictions for the masked part
+                predictions = outputs[:, -1, :]
+
+                # Generate completions token by token
+                generated_tokens = []
+                curr_input = partial_input.clone()
+
+                for _ in range(mask_len):
+                    with torch.no_grad():
+                        output, _ = model(curr_input)
+                        prediction = output[:, -1, :]
+                        next_token = prediction.argmax(dim=-1).unsqueeze(0)
+                        generated_tokens.append(next_token.item())
+                        curr_input = torch.cat([curr_input, next_token], dim=1)
+            else:
+                # For transformer models
+                causal_mask = create_causal_mask(visible_len).to(device)
+                cross_mask = create_cross_attention_mask(visible_len, visible_len).to(
+                    device
+                )
+
+                if cfg.model_type == "decoder":
+                    outputs = model(partial_input, causal_mask)
+                else:  # transformer
+                    outputs = model(
+                        partial_input,
+                        partial_input,
+                        causal_mask,
+                        causal_mask,
+                        cross_mask,
+                    )
+
+                # Generate completions token by token
+                generated_tokens = []
+                curr_input = partial_input.clone()
+
+                for _ in range(mask_len):
+                    with torch.no_grad():
+                        curr_len = curr_input.size(1)
+                        causal_mask = create_causal_mask(curr_len).to(device)
+                        cross_mask = create_cross_attention_mask(curr_len, curr_len).to(
+                            device
+                        )
+
+                        if cfg.model_type == "decoder":
+                            output = model(curr_input, causal_mask)
+                        else:  # transformer
+                            output = model(
+                                curr_input,
+                                curr_input,
+                                causal_mask,
+                                causal_mask,
+                                cross_mask,
+                            )
+
+                        prediction = output[:, -1, :]
+                        next_token = prediction.argmax(dim=-1).unsqueeze(1)
+                        generated_tokens.append(next_token.item())
+                        curr_input = torch.cat([curr_input, next_token], dim=1)
+
+            # Get the target tokens (what should have been generated)
+            target_tokens = target_seq[:, visible_len - 1 :].squeeze().cpu().tolist()
+
+            # Convert tokens to text
+            predicted_text = tokenizer.decode(generated_tokens)
+            target_text = tokenizer.decode(target_tokens)
+
+            # Calculate ROUGE scores
+            scores = rouge.score(target_text, predicted_text)
+            rouge_scores["rouge1"].append(scores["rouge1"].fmeasure)
+            rouge_scores["rouge2"].append(scores["rouge2"].fmeasure)
+            rouge_scores["rougeL"].append(scores["rougeL"].fmeasure)
+
+            # Calculate BLEU score
+            predicted_tokens = [
+                tokenizer.idx2word.get(idx, "<unk>") for idx in generated_tokens
+            ]
+            target_tokens = [
+                tokenizer.idx2word.get(idx, "<unk>") for idx in target_tokens
+            ]
+            bleu = sentence_bleu(
+                [target_tokens], predicted_tokens, smoothing_function=smoother
+            )
+            bleu_scores.append(bleu)
+
+    print("Averaging scores...")
+    # Average scores
+    avg_rouge1 = (
+        sum(rouge_scores["rouge1"]) / len(rouge_scores["rouge1"])
+        if rouge_scores["rouge1"]
+        else 0
+    )
+    avg_rouge2 = (
+        sum(rouge_scores["rouge2"]) / len(rouge_scores["rouge2"])
+        if rouge_scores["rouge2"]
+        else 0
+    )
+    avg_rougeL = (
+        sum(rouge_scores["rougeL"]) / len(rouge_scores["rougeL"])
+        if rouge_scores["rougeL"]
+        else 0
+    )
+    avg_bleu = sum(bleu_scores) / len(bleu_scores) if bleu_scores else 0
+
+    results = {
+        "rouge1": avg_rouge1,
+        "rouge2": avg_rouge2,
+        "rougeL": avg_rougeL,
+        "bleu": avg_bleu,
+    }
+
+    print("Evaluation Results:")
+    print(f"ROUGE-1: {avg_rouge1:.4f}")
+    print(f"ROUGE-2: {avg_rouge2:.4f}")
+    print(f"ROUGE-L: {avg_rougeL:.4f}")
+    print(f"BLEU: {avg_bleu:.4f}")
+
+    return results
+
+
+def plot_model_comparison(results, param_counts):
+    """
+    Plot model comparison results with ROUGE and BLEU scores.
+
+    Args:
+        results: Dictionary with model names as keys, each containing score dictionaries
+        param_counts: Dictionary with model names as keys and parameter counts as values
+    """
+    # Create figure with two subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+    # Prepare data for plotting
+    models = list(results.keys())
+    x = np.arange(len(models))
+    width = 0.2
+
+    # Plot ROUGE scores
+    rouge1_scores = [results[model]["rouge1"] for model in models]
+    rouge2_scores = [results[model]["rouge2"] for model in models]
+    rougeL_scores = [results[model]["rougeL"] for model in models]
+
+    ax1.bar(x - width, rouge1_scores, width, label="ROUGE-1")
+    ax1.bar(x, rouge2_scores, width, label="ROUGE-2")
+    ax1.bar(x + width, rougeL_scores, width, label="ROUGE-L")
+
+    # Add model parameter counts on x-axis labels
+    model_labels = [
+        f"{model}\n({param_counts[model] / 1e6:.2f}M params)" for model in models
+    ]
+
+    ax1.set_xlabel("Model")
+    ax1.set_ylabel("Score")
+    ax1.set_title("ROUGE Scores Comparison")
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(model_labels)
+    ax1.legend()
+    ax1.set_ylim(0, 1)
+
+    # Plot BLEU scores
+    bleu_scores = [results[model]["bleu"] for model in models]
+
+    ax2.bar(x, bleu_scores, width * 2, label="BLEU")
+    ax2.set_xlabel("Model")
+    ax2.set_ylabel("Score")
+    ax2.set_title("Model Parameter Counts")
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(model_labels)
+    ax2.legend()
+    ax2.set_ylim(0, 1)
+
+    plt.tight_layout()
+    plt.savefig("model_comparison.png")
+    print("Comparison plot saved to 'model_comparison.png'")
+    plt.close()
+
+
+def compare_all_models(texts, tokenizer):
+    """
+    Train and evaluate all three models (LSTM, Decoder, Transformer)
+    and compare their reconstruction capabilities.
+
+    Args:
+        texts: List of texts for training and evaluation
+        tokenizer: Tokenizer for processing texts
+    """
+    print("Starting model comparison...")
+    vocab_size = len(tokenizer)
+
+    # Store original model type
+    original_model_type = cfg.model_type
+
+    # Prepare sequences
+    sequences = prepare_sequences(texts, tokenizer, seq_length=cfg.seq_length)
+    train_sequences, test_sequences = split_train_test(sequences)
+
+    # Create data loaders
+    train_loader = DataLoader(
+        train_sequences,
+        batch_size=cfg.batch_size,
+        shuffle=True,
+        num_workers=cfg.num_workers,
+    )
+    test_loader = DataLoader(
+        test_sequences, batch_size=cfg.batch_size, num_workers=cfg.num_workers
+    )
+
+    # Models to compare
+    model_types = ["lstm", "decoder", "transformer"]
+    results = {}
+    param_counts = {}
+
+    # Train and evaluate each model
+    for model_type in model_types:
+        print(f"\n{'-' * 50}")
+        print(f"Training {model_type.upper()} model")
+        print(f"{'-' * 50}")
+
+        # Set current model type
+        cfg.model_type = model_type
+
+        # Initialize model
+        if model_type == "lstm":
+            model = LSTMLanguageModel(
+                vocab_size=vocab_size,
+                embedding_dim=cfg.embedding_dim_lstm,
+                hidden_dim=cfg.hidden_dim_lstm,
+                num_layers=cfg.num_layers_lstm,
+                dropout=cfg.dropout_lstm,
+            ).to(cfg.device)
+        else:
+            modelClass = get_model_class(model_type)
+            if model_type == "transformer":
+                num_layers = cfg.num_layers // 2
+            else:
+                num_layers = cfg.num_layers
+            model = modelClass(
+                vocab_size=vocab_size,
+                d_model=cfg.d_model,
+                num_layers=num_layers,
+                num_heads=cfg.num_heads,
+                d_ff=cfg.d_ff,
+                dropout=cfg.dropout,
+                max_seq_length=cfg.max_seq_length,
+            ).to(cfg.device)
+
+        # Count parameters
+        param_count = sum(p.numel() for p in model.parameters())
+        param_counts[model_type] = param_count
+        print(f"Model parameters: {param_count:,} ({param_count / 1e6:.2f}M)")
+
+        # Initialize loss and optimizer
+        criterion = init_loss_fn(cfg.loss_fn)
+        if model_type == "lstm":
+            optimizer = optim.Adam(
+                model.parameters(), lr=cfg.lstm_lr, weight_decay=cfg.weight_decay
+            )
+        else:
+            optimizer = optim.Adam(
+                model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay
+            )
+
+        # Train model
+        train_losses, test_losses = train_model(
+            model,
+            train_loader,
+            test_loader,
+            tokenizer,
+            optimizer,
+            criterion,
+            cfg,
+        )
+
+        # Evaluate model
+        print(f"Evaluating {model_type.upper()} model reconstruction ability...")
+        if len(texts) > 0:
+            reconstruction_scores = evaluate_reconstruction(
+                model,
+                tokenizer,
+                texts[0],
+                mask_ratio=cfg.mask_ratio,
+                device=cfg.device,
+            )
+            results[model_type] = reconstruction_scores
+
+    # Restore original model type
+    cfg.model_type = original_model_type
+
+    # Plot comparison results
+    plot_model_comparison(results, param_counts)
+
+    # Print parameter comparison
+    print("\nModel parameter counts:")
+    for model_type, count in param_counts.items():
+        print(f"{model_type.upper()}: {count:,} parameters ({count / 1e6:.2f}M)")
+
+    return results, param_counts
+
 
 
 if __name__ == "__main__":

@@ -145,10 +145,10 @@ def train_one_epoch(
         # Move data to device
         inputs = inputs.to(device)
         targets = targets.to(device)
-        
+
         # Forward pass based on model type
         optimizer.zero_grad()
-        
+
         if model_type == "lstm":
             # LSTM model only takes input and returns output and hidden state
             outputs, _ = model(inputs)
@@ -168,7 +168,9 @@ def train_one_epoch(
 
             # Cross attention mask (allows decoder to attend to all encoder positions)
             if model_type == "transformer":
-                cross_mask = torch.ones((tgt_seq_len, src_seq_len), device=device).bool()
+                cross_mask = torch.ones(
+                    (tgt_seq_len, src_seq_len), device=device
+                ).bool()
                 outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
             else:  # decoder_only
                 outputs = model(inputs, tgt_mask)
@@ -242,7 +244,7 @@ def evaluate_model(model, test_loader, criterion, device, model_type="lstm"):
             # Move data to device
             inputs = inputs.to(device)
             targets = targets.to(device)
-            
+
             # Forward pass based on model type
             if model_type == "lstm":
                 # LSTM model only takes input and returns output and hidden state
@@ -263,7 +265,9 @@ def evaluate_model(model, test_loader, criterion, device, model_type="lstm"):
 
                 # Cross attention mask (allows decoder to attend to all encoder positions)
                 if model_type == "transformer":
-                    cross_mask = torch.ones((tgt_seq_len, src_seq_len), device=device).bool()
+                    cross_mask = torch.ones(
+                        (tgt_seq_len, src_seq_len), device=device
+                    ).bool()
                     outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
                 else:  # decoder_only
                     outputs = model(inputs, tgt_mask)
@@ -305,6 +309,7 @@ def train_model(
     elif isinstance(model, Transformer):
         # Check if it's a decoder-only model by looking at the forward method signature
         import inspect
+
         sig = inspect.signature(model.forward)
         if len(sig.parameters) == 2:  # Only takes input and mask
             model_type = "decoder_only"
@@ -343,16 +348,17 @@ def train_model(
                     inputs[0].tolist(), skip_special_tokens=True
                 )
                 print(f"Input Text: {input_text}")
-                
+
                 # Generate summary using the appropriate model type
                 from Summary.summarization import summarize
+
                 _, generated_summary = summarize(
                     model,
                     input_text,
                     tokenizer,
                     cfg.device,
                     model_type=model_type,
-                    max_length=cfg.output_length
+                    max_length=cfg.output_length,
                 )
                 print(f"Generated Summary: {generated_summary}")
                 print("-" * 50)
@@ -445,9 +451,11 @@ def generate_text(
             next_token_logits = output[:, -1, :] / temperature
 
             # Set probability of token to 0 to prevent sampling it
-            if hasattr(tokenizer, 'use_pretrained') and not tokenizer.use_pretrained:
+            if hasattr(tokenizer, "use_pretrained") and not tokenizer.use_pretrained:
                 unk_idx = tokenizer.vocab["<unk>"]
-                next_token_logits[0, unk_idx] = float("-inf")  # Set to negative infinity
+                next_token_logits[0, unk_idx] = float(
+                    "-inf"
+                )  # Set to negative infinity
 
                 # Sample from the distribution
                 probs = F.softmax(next_token_logits, dim=-1)
@@ -455,10 +463,11 @@ def generate_text(
 
                 if show_top_k:
                     top_k_values, top_k_indices = torch.topk(probs, k=top_k, dim=-1)
-                    top_k_tokens = [tokenizer.decode([idx.item()]) for idx in top_k_indices[0]]
+                    top_k_tokens = [
+                        tokenizer.decode([idx.item()]) for idx in top_k_indices[0]
+                    ]
                     print(f"Top {top_k} tokens: {top_k_tokens}")
 
-            
             # Stop if we predict the end token or reach max sequence length
             if hasattr(tokenizer, "use_pretrained") and tokenizer.use_pretrained:
                 # For BERT tokenizer, check for [SEP] token

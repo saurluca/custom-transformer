@@ -7,6 +7,7 @@ cfg = SimpleNamespace(**{})
 cfg.save_model = True
 cfg.generate_samples = True  # generate sample text based on example prompts
 cfg.example_prompts = ["The man who", "The thing that", "I love "]
+cfg.compare_models = False  # set to True to train and compare all model types
 
 # data
 cfg.text_names = [
@@ -34,9 +35,10 @@ cfg.max_chars_per_text = 20000  # Limit each text to num of characters
 cfg.min_vocab_freq = 2
 cfg.max_vocab_size = 10000
 cfg.seq_length = 32
-cfg.train_size = 0.9
+cfg.train_size = 0.8
 cfg.use_pretrained = False
 cfg.pretrained_model = "bert-base-uncased"
+cfg.mask_ratio = 0.7
 
 # training
 cfg.batch_size = 32  # Reduced batch size for testing
@@ -71,7 +73,6 @@ cfg.sampling_strategy = "multinomial"  # "multinomial", "greedy", "top-k", "top-
 cfg.show_top_k = False
 
 cfg.device = "cuda" if torch.cuda.is_available() else "cpu"
-
 
 # Translation
 cfg.translation_tokenizer = "Helsinki-NLP/opus-mt-de-en"
