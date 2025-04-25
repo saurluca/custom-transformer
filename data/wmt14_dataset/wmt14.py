@@ -6,7 +6,10 @@ from transformers import AutoTokenizer
 import os
 from tqdm import tqdm
 
-def preprocess_wmt14(split, tokenizer, source_lang="en", target_lang="de", max_length=100):
+
+def preprocess_wmt14(
+    split, tokenizer, source_lang="en", target_lang="de", max_length=100
+):
     """
     Preprocess the WMT14 dataset for training.
 
@@ -37,6 +40,7 @@ def preprocess_wmt14(split, tokenizer, source_lang="en", target_lang="de", max_l
 
     return tokenized_data
 
+
 def save_preprocessed_data(data, save_path):
     """
     Save preprocessed data to a JSON file.
@@ -52,6 +56,7 @@ def save_preprocessed_data(data, save_path):
         for src_tokens, tgt_tokens in data:
             json.dump({"src": src_tokens, "tgt": tgt_tokens}, f)
             f.write("\n")
+
 
 def load_preprocessed_data(file_path, lines):
     """
@@ -69,6 +74,7 @@ def load_preprocessed_data(file_path, lines):
             example = json.loads(line)
             data.append((example["src"], example["tgt"]))
     return data
+
 
 def prepare_dataloader(data, batch_size=32, max_length=50):
     """
@@ -105,9 +111,11 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
 
     return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
+
 def count_json_lines(file_path):
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         return sum(1 for _ in f)
+
 
 def load_or_preprocess_wmt14_data(
     split,

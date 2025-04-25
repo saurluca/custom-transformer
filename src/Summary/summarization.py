@@ -1,4 +1,6 @@
 import torch
+
+
 def summarize_lstm(model, input_text, tokenizer, device, max_length=50):
     """
     Generate a summary using an LSTM model.
@@ -18,33 +20,37 @@ def summarize_lstm(model, input_text, tokenizer, device, max_length=50):
     model.eval()
     with torch.no_grad():
         # Encode input text
-        inputs = tokenizer(input_text, return_tensors="pt", padding=True, truncation=True)
+        inputs = tokenizer(
+            input_text, return_tensors="pt", padding=True, truncation=True
+        )
         input_ids = inputs["input_ids"].to(device)
-        
+
         # Initialize decoder input with start token
         decoder_input = torch.tensor([[tokenizer.bos_token_id]]).to(device)
         generated_tokens = [tokenizer.bos_token_id]
-        
+
         # Generate tokens one at a time
         for _ in range(max_length):
             # Get model predictions
             outputs, _ = model(decoder_input)
             next_token_logits = outputs[:, -1, :]
-            
+
             # Get the most likely next token
             next_token = torch.argmax(next_token_logits, dim=-1).item()
             generated_tokens.append(next_token)
-            
+
             # Stop if we predict the end token
             if next_token == tokenizer.eos_token_id:
                 break
-                
+
             # Update decoder input for next iteration
-            decoder_input = torch.cat([decoder_input, torch.tensor([[next_token]]).to(device)], dim=1)
-        
+            decoder_input = torch.cat(
+                [decoder_input, torch.tensor([[next_token]]).to(device)], dim=1
+            )
+
         # Decode the generated tokens
         summary = tokenizer.decode(generated_tokens, skip_special_tokens=True)
-        
+
         return generated_tokens, summary
 
 
@@ -68,7 +74,9 @@ def summarize_decoder_only(model, input_text, tokenizer, device, max_length=50):
 
     # Encode the input text into token indices
     input_sequence = tokenizer.encode(input_text)
-    input_tensor = torch.tensor(input_sequence, dtype=torch.long).unsqueeze(0).to(device)  # [1, seq_len]
+    input_tensor = (
+        torch.tensor(input_sequence, dtype=torch.long).unsqueeze(0).to(device)
+    )  # [1, seq_len]
 
     generated_tokens = input_sequence  # Start with the input sequence
     current_input = input_tensor
@@ -76,14 +84,18 @@ def summarize_decoder_only(model, input_text, tokenizer, device, max_length=50):
     with torch.no_grad():
         for _ in range(max_length):
             # Forward pass through the model
-            output = model(current_input, tgt_mask=None)  # No mask needed for decoder-only models
+            output = model(
+                current_input, tgt_mask=None
+            )  # No mask needed for decoder-only models
 
             # Get the token with the highest probability (greedy decoding)
             next_token = output[:, -1, :].argmax(dim=-1).item()
             generated_tokens.append(next_token)
 
             # Stop if the end-of-sequence token is generated
-            if next_token == tokenizer.vocab.get("[SEP]", tokenizer.vocab.get("</s>", None)):
+            if next_token == tokenizer.vocab.get(
+                "[SEP]", tokenizer.vocab.get("</s>", None)
+            ):
                 break
 
             # Prepare the next input (use the last predicted token)
@@ -119,21 +131,28 @@ def summarize_encoder_decoder(model, input_text, tokenizer, device, max_length=5
 
     # Create source mask for encoder (1 for non-padding tokens, 0 for padding)
     src_mask = attention_mask.unsqueeze(1).unsqueeze(2)  # [batch_size, 1, 1, src_len]
-    
+
     # Generate the encoder output
     encoder_output = model.encoder(input_ids, src_mask)
 
     # Initialize the decoder input with the start token
-    decoder_input = torch.tensor([[tokenizer.bos_token_id]], dtype=torch.long).to(device)
+    decoder_input = torch.tensor([[tokenizer.bos_token_id]], dtype=torch.long).to(
+        device
+    )
     generated_tokens = [tokenizer.bos_token_id]
 
     with torch.no_grad():
         for i in range(max_length):
             # Create causal mask for decoder (prevent attending to future tokens)
-            tgt_mask = torch.triu(
-                torch.ones((1, decoder_input.size(1), decoder_input.size(1))), diagonal=1
-            ).bool().to(device)
-            
+            tgt_mask = (
+                torch.triu(
+                    torch.ones((1, decoder_input.size(1), decoder_input.size(1))),
+                    diagonal=1,
+                )
+                .bool()
+                .to(device)
+            )
+
             # Create cross attention mask
             cross_mask = attention_mask.unsqueeze(1).repeat(1, decoder_input.size(1), 1)
 
@@ -150,7 +169,11 @@ def summarize_encoder_decoder(model, input_text, tokenizer, device, max_length=5
 
             # Append the next token to the decoder input
             decoder_input = torch.cat(
-                [decoder_input, torch.tensor([[next_token]], dtype=torch.long).to(device)], dim=1
+                [
+                    decoder_input,
+                    torch.tensor([[next_token]], dtype=torch.long).to(device),
+                ],
+                dim=1,
             )
 
     # Decode the generated tokens back to text, skipping special tokens
@@ -187,6 +210,10 @@ def summarize(model, input_text, tokenizer, device, model_type="lstm", max_lengt
     elif model_type == "decoder_only":
         return summarize_decoder_only(model, input_text, tokenizer, device, max_length)
     elif model_type == "encoder_decoder":
-        return summarize_encoder_decoder(model, input_text, tokenizer, device, max_length)
+        return summarize_encoder_decoder(
+            model, input_text, tokenizer, device, max_length
+        )
     else:
-        raise ValueError(f"Invalid model_type: {model_type}. Must be one of: 'lstm', 'decoder_only', 'encoder_decoder'")
+        raise ValueError(
+            f"Invalid model_type: {model_type}. Must be one of: 'lstm', 'decoder_only', 'encoder_decoder'"
+        )

@@ -2,6 +2,7 @@ from nltk.tokenize import word_tokenize
 from collections import Counter
 from transformers import AutoTokenizer
 
+
 class WordTokenizer:
     def __init__(
         self,
@@ -15,7 +16,9 @@ class WordTokenizer:
 
         if use_pretrained:
             # Use a pretrained tokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model, use_fast=True)
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                pretrained_model, use_fast=True
+            )
             # Create vocabulary mappings from pretrained tokenizer
             self.vocab = {
                 token: idx for token, idx in self.tokenizer.get_vocab().items()
@@ -62,4 +65,3 @@ class WordTokenizer:
 
     def __len__(self):
         return len(self.vocab)
-

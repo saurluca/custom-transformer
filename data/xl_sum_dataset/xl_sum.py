@@ -6,6 +6,7 @@ from transformers import AutoTokenizer
 import os
 from tqdm import tqdm
 
+
 def preprocess_dataset_xl_sum(split, tokenizer, max_length=100):
     """
     Preprocess the WMT14 dataset for training.
@@ -19,7 +20,7 @@ def preprocess_dataset_xl_sum(split, tokenizer, max_length=100):
         List of tokenized input-output pairs.
     """
     # Load the xl-sum dataset
-    dataset =load_dataset("csebuetnlp/xlsum",name='english', split = split)
+    dataset = load_dataset("csebuetnlp/xlsum", name="english", split=split)
 
     tokenized_data = []
     for example in tqdm(dataset, desc=f"Preprocessing {split} split"):
@@ -27,13 +28,14 @@ def preprocess_dataset_xl_sum(split, tokenizer, max_length=100):
         src_text = example["title"]
         tgt_text = example["summary"]
 
-        # Tokenize 
+        # Tokenize
         src_tokens = tokenizer.encode(src_text, max_length=max_length)
         tgt_tokens = tokenizer.encode(tgt_text, max_length=max_length)
 
         tokenized_data.append((src_tokens, tgt_tokens))
 
     return tokenized_data
+
 
 def save_preprocessed_data_xl_sum(data, save_path):
     """
@@ -51,6 +53,7 @@ def save_preprocessed_data_xl_sum(data, save_path):
             json.dump({"src": src_tokens, "tgt": tgt_tokens}, f)
             f.write("\n")
 
+
 def load_preprocessed_data_xl_sum(file_path, lines):
     """
     Load preprocessed data from a JSON file.
@@ -67,6 +70,7 @@ def load_preprocessed_data_xl_sum(file_path, lines):
             example = json.loads(line)
             data.append((example["src"], example["tgt"]))
     return data
+
 
 def prepare_dataloader_xl_sum(data, batch_size=32, max_length=50):
     """
@@ -104,9 +108,11 @@ def prepare_dataloader_xl_sum(data, batch_size=32, max_length=50):
     dataset = TensorDataset(inputs, targets)
     return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
+
 def count_json_lines_xl_sum(file_path):
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         return sum(1 for _ in f)
+
 
 def load_or_preprocess_xl_sum_data(
     split,
