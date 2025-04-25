@@ -12,7 +12,7 @@ from typing import List, Tuple
 sys.path.append('sys')
 
 from Transformer.transformer import Transformer, TransformerDecoder
-from LTSM.lstm import LSTMLanguageModel
+from LSTM.lstm import LSTMLanguageModel
 from Summary.summarization import summarize_encoder_decoder
 
 
@@ -421,34 +421,19 @@ def generate_text(
 
             next_token_logits = output[:, -1, :] / temperature
 
-            # Set probability of <unk> token to 0 to prevent sampling it
+            # Set probability of token to 0 to prevent sampling it
             if hasattr(tokenizer, 'use_pretrained') and not tokenizer.use_pretrained:
                 unk_idx = tokenizer.vocab["<unk>"]
-                next_token_logits[0, unk_idx] = float(
-                    "-inf"
-                )  # Set to negative infinity
+                next_token_logits[0, unk_idx] = float("-inf")  # Set to negative infinity
 
-            # Sample from the distribution
-            probs = torch.softmax(next_token_logits, dim=-1)
-            next_token = sample_next_token(probs, sampling_strategy, top_k, top_p)
+                # Sample from the distribution
+                probs = F.softmax(next_token_logits, dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)
 
-            if show_top_k:
-                # print the input sentence
-                print(f"Input: {tokenizer.decode(tokens[0].tolist())}")
-                # Get top k most likely next tokens
-                top_probs, top_indices = torch.topk(probs[0], top_k)
-                print("\nTop 5 most likely next words:")
-                for prob, idx in zip(top_probs, top_indices):
-                    word = tokenizer.idx2word[idx.item()]
-                    print(f"  {word}: {prob.item():.4f}")
-
-                # Print the selected word and its probability
-                selected_word = tokenizer.idx2word[next_token.item()]
-                selected_prob = probs[0, next_token.item()].item()
-                print(
-                    f"\nSelected word: {selected_word} (probability: {selected_prob:.4f})"
-                )
-                print()
+                if show_top_k:
+                    top_k_values, top_k_indices = torch.topk(probs, k=top_k, dim=-1)
+                    top_k_tokens = [tokenizer.decode([idx.item()]) for idx in top_k_indices[0]]
+                    print(f"Top {top_k} tokens: {top_k_tokens}")
 
             
             # Stop if we predict the end token or reach max sequence length
@@ -460,9 +445,9 @@ def generate_text(
                 ):
                     break
             else:
-                # For custom tokenizer, check for </s> token
+                # For custom tokenizer, check for end token
                 if (
-                    next_token.item() == tokenizer.vocab["</s>"]
+                    next_token.item() == tokenizer.vocab["[END]"]
                     or tokens.size(1) >= seq_length
                 ):
                     break

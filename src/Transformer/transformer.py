@@ -36,7 +36,12 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x):
         # Add the positional embeddings to the token embeddings
-        return x + self.pe[:, : x.size(1)]
+        # Ensure the positional encoding is properly sized for the input sequence
+        seq_len = x.size(1)
+        if seq_len > self.pe.size(1):
+            # If sequence length is greater than max_seq_length, extend the positional encoding
+            self.pe = F.pad(self.pe, (0, 0, 0, seq_len - self.pe.size(1)))
+        return x + self.pe[:, :seq_len]
 
 
 class MultiHeadAttention(nn.Module):

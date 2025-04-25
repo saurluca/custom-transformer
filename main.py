@@ -8,8 +8,12 @@ import os
 import certifi
 from huggingface_hub import login
 # from dotenv import load_dotenv
-from transformers import AutoTokenizer
-from LTSM.lstm import LSTMLanguageModel
+from transformers import AutoTokenizer, BartForConditionalGeneration
+
+# Add src directory to Python path
+sys.path.append('src')
+
+from LSTM.lstm import LSTMLanguageModel
 from Transformer.transformer import Transformer
 from Summary.summarization import summarize_lstm, summarize_decoder_only, summarize_encoder_decoder, summarize
 from Translation.translator import translate_lstm, translate_decoder_only, translate_encoder_decoder, translate
@@ -28,10 +32,9 @@ from Tokenize.word_tokenizer import WordTokenizer
 from data.xl_sum_dataset.xl_sum import preprocess_dataset_xl_sum,save_preprocessed_data_xl_sum,load_preprocessed_data_xl_sum, prepare_dataloader_xl_sum,count_json_lines_xl_sum,load_or_preprocess_xl_sum_data
 from data.wmt14_dataset.wmt14 import preprocess_wmt14, prepare_dataloader
 from Evaluation.bleu_score import calculate_bleu
+from Evaluation.rouge_score import calculate_rouge_scores, plot_rouge_scores
 
 # load_dotenv()
-sys.path.append('src')
-
 # if hf_token:=os.getenv("HUGGINGFACE_TOKEN"):
 #     login(token=hf_token)
 #     print("Your HF account has been successfully logged in!")
@@ -184,9 +187,71 @@ def Summarization():
     print("Plotting loss curves...")
     plot_loss(train_losses, test_losses, save_path="plots/transformer_summarization_loss.png")
     
+    # Test summarization on example texts
+    print("\nTesting summarization on example texts...")
+    example_texts = [
+        "The quick brown fox jumps over the lazy dog. This classic pangram contains every letter of the English alphabet at least once. Pangrams have been used to display typefaces and test equipment since the invention of printing.",
+        "Artificial intelligence has transformed various sectors including healthcare, finance, and transportation. Machine learning algorithms can now diagnose diseases, predict market trends, and drive autonomous vehicles. However, concerns about AI ethics and safety continue to grow.",
+        "Climate change poses significant challenges to global ecosystems. Rising temperatures, extreme weather events, and sea level rise threaten both human communities and wildlife. Scientists emphasize the need for immediate action to reduce greenhouse gas emissions."
+    ]
+    
+    # Get ground truth summaries from the test set
+    print("\nGetting ground truth summaries from test set...")
+    ground_truth_summaries = []
+    for batch in test_loader:
+        if isinstance(batch, (list, tuple)):
+            src, tgt = batch
+        else:
+            src = batch['input_ids']
+            tgt = batch['labels']
+            
+        # Convert tensors to lists and filter out padding tokens (0)
+        src_tokens = [token for token in src[0].tolist() if token != 0]
+        tgt_tokens = [token for token in tgt[0].tolist() if token != 0]
+        
+        # Convert lists to tensors for decoding
+        src_tensor = torch.tensor(src_tokens)
+        tgt_tensor = torch.tensor(tgt_tokens)
+        
+        # Decode the tokens to text
+        src_text = tokenizer.decode(src_tensor, skip_special_tokens=True)
+        tgt_text = tokenizer.decode(tgt_tensor, skip_special_tokens=True)
+        
+        ground_truth_summaries.append(tgt_text)
+        
+        if len(ground_truth_summaries) >= len(example_texts):
+            break
+    
+    # Generate summaries and calculate ROUGE scores
+    print("\nGenerating summaries and calculating ROUGE scores...")
+    generated_summaries = []
+    for i, text in enumerate(example_texts):
+        print(f"\nExample {i + 1}:")
+        print(f"Input text: {text[:100]}...")
+        
+        # Generate summary using our custom transformer
+        _, summary = summarize(model, text, tokenizer, cfg.device, model_type="encoder_decoder")
+        
+        if summary:
+            print(f"Generated summary: {summary}")
+            generated_summaries.append(summary)
+        else:
+            print("Failed to generate summary")
+            generated_summaries.append("")  # Add empty string for failed summaries
+    
+    # Calculate and plot ROUGE scores
+    print("\nCalculating ROUGE scores...")
+    rouge_scores = calculate_rouge_scores(generated_summaries, ground_truth_summaries)
+    print("\nROUGE Scores:")
+    for metric, score in rouge_scores.items():
+        print(f"{metric}: {score:.4f}")
+    
+    # Plot ROUGE scores
+    plot_rouge_scores(rouge_scores, save_path="plots/rouge_scores.png")
+    
     # Save model if configured
     if cfg.save_model:
-        print("Saving model...")
+        print("\nSaving model...")
         try:
             torch.save(model.state_dict(), "models/transformer_summarization.pth")
             print("Model saved successfully!")
@@ -203,58 +268,7 @@ def Summarization():
         # Save config
         with open("models/config_summarization.json", "w") as f:
             json.dump(cfg.__dict__, f)
-        print("Config saved to models/config_summarization.json")
-    
-    # Test summarization on example texts
-    print("\nTesting summarization on example texts...")
-    
-    # Get a few examples from the test set
-    example_inputs = []
-    for batch in test_loader:
-        src, tgt = batch
-        # Convert tensors to lists directly using PyTorch
-        src_list = src.squeeze(0).cpu().tolist()
-        tgt_list = tgt.squeeze(0).cpu().tolist()
-        example_inputs.append((src_list, tgt_list))
-        if len(example_inputs) >= 3:  # Limit to 3 examples for testing
-            break
-    
-    # Decode the example inputs for readability
-    example_texts = []
-    example_summaries = []
-    for src, tgt in example_inputs:
-        # Filter out padding tokens (0)
-        src_tokens = [t for t in src if t != 0]
-        tgt_tokens = [t for t in tgt if t != 0]
-        
-        # Convert token IDs to strings one at a time
-        src_text = tokenizer.convert_tokens_to_string([tokenizer.convert_ids_to_tokens(t) for t in src_tokens])
-        tgt_text = tokenizer.convert_tokens_to_string([tokenizer.convert_ids_to_tokens(t) for t in tgt_tokens])
-        
-        example_texts.append(src_text)
-        example_summaries.append(tgt_text)
-    
-    print("\nExample Input Texts and Ground Truth Summaries:")
-    for i, (text, summary) in enumerate(zip(example_texts, example_summaries)):
-        print(f"\nExample {i+1}:")
-        print(f"Input Text: {text}")
-        print(f"Ground Truth Summary: {summary}")
-    
-    # Test summarization with the model
-    print("\nTesting summarization with Encoder-Decoder Transformer:")
-    for i, input_text in enumerate(example_texts):
-        print(f"\nExample {i+1}:")
-        print(f"Input Text: {input_text}")
-        
-        # Summarize using Encoder-Decoder Transformer
-        _, generated_summary = summarize_encoder_decoder(model, input_text, tokenizer, cfg.device, max_length=50)
-        print(f"Generated Summary: {generated_summary}")
-        
-        # Calculate BLEU score
-        bleu_score = calculate_bleu([generated_summary], [example_summaries[i]])
-        print(f"BLEU Score: {bleu_score:.4f}")
-    
-    print("-" * 50)
+        print("Config saved successfully!")
 
 
 
