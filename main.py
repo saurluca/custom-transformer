@@ -158,12 +158,32 @@ def Summarization():
     train_loader = prepare_dataloader_xl_sum(train_data, batch_size=cfg.batch_size, max_length=cfg.max_seq_length)
     test_loader = prepare_dataloader_xl_sum(test_data, batch_size=cfg.batch_size, max_length=cfg.max_seq_length)
     
-    # Initialize model
-    print("Initializing encoder-decoder Transformer model...")
+    # Initialize models
+    print("Initializing models...")
     vocab_size = len(tokenizer)
     
+    # LSTM Model
+    lstm_model = LSTMLanguageModel(
+        vocab_size=vocab_size,
+        embedding_dim=cfg.embedding_dim_lstm,
+        hidden_dim=cfg.hidden_dim_lstm,
+        num_layers=cfg.num_layers_lstm,
+        dropout=cfg.dropout_lstm,
+    ).to(cfg.device)
+    
+    # Decoder-Only Transformer Model
+    decoder_only_model = Transformer(
+        vocab_size=vocab_size,
+        d_model=cfg.d_model,
+        num_heads=cfg.num_heads,
+        num_layers=cfg.num_layers,
+        d_ff=cfg.d_ff,
+        max_seq_length=cfg.max_seq_length,
+        dropout=cfg.dropout
+    ).to(cfg.device)
+    
     # Encoder-Decoder Transformer Model
-    model = Transformer(
+    encoder_decoder_model = Transformer(
         vocab_size=vocab_size,
         d_model=cfg.d_model,
         num_heads=cfg.num_heads,
@@ -175,17 +195,36 @@ def Summarization():
     
     # Initialize loss function and optimizer
     criterion = init_loss_fn(cfg.loss_fn)
-    optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     
-    # Train model
-    print("Training Encoder-Decoder Transformer model...")
-    train_losses, test_losses = train_model(
-        model, train_loader, test_loader, tokenizer, optimizer, criterion, cfg
+    # Train models
+    print("Training models...")
+    
+    # Train LSTM model
+    print("\nTraining LSTM model...")
+    lstm_optimizer = optim.Adam(lstm_model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
+    lstm_train_losses, lstm_test_losses = train_model(
+        lstm_model, train_loader, test_loader, tokenizer, lstm_optimizer, criterion, cfg
+    )
+    
+    # Train Decoder-Only model
+    print("\nTraining Decoder-Only model...")
+    decoder_optimizer = optim.Adam(decoder_only_model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
+    decoder_train_losses, decoder_test_losses = train_model(
+        decoder_only_model, train_loader, test_loader, tokenizer, decoder_optimizer, criterion, cfg
+    )
+    
+    # Train Encoder-Decoder model
+    print("\nTraining Encoder-Decoder model...")
+    encoder_decoder_optimizer = optim.Adam(encoder_decoder_model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
+    encoder_decoder_train_losses, encoder_decoder_test_losses = train_model(
+        encoder_decoder_model, train_loader, test_loader, tokenizer, encoder_decoder_optimizer, criterion, cfg
     )
     
     # Plot loss curves
     print("Plotting loss curves...")
-    plot_loss(train_losses, test_losses, save_path="plots/transformer_summarization_loss.png")
+    plot_loss(lstm_train_losses, lstm_test_losses, save_path="plots/lstm_summarization_loss.png")
+    plot_loss(decoder_train_losses, decoder_test_losses, save_path="plots/decoder_only_summarization_loss.png")
+    plot_loss(encoder_decoder_train_losses, encoder_decoder_test_losses, save_path="plots/encoder_decoder_summarization_loss.png")
     
     # Test summarization on example texts
     print("\nTesting summarization on example texts...")
@@ -222,41 +261,66 @@ def Summarization():
         if len(ground_truth_summaries) >= len(example_texts):
             break
     
-    # Generate summaries and calculate ROUGE scores
-    print("\nGenerating summaries and calculating ROUGE scores...")
-    generated_summaries = []
-    for i, text in enumerate(example_texts):
-        print(f"\nExample {i + 1}:")
-        print(f"Input text: {text[:100]}...")
+    # Generate summaries for each model type and calculate ROUGE scores
+    model_types = ["lstm", "decoder_only", "encoder_decoder"]
+    models = {
+        "lstm": lstm_model,
+        "decoder_only": decoder_only_model,
+        "encoder_decoder": encoder_decoder_model
+    }
+    
+    all_rouge_scores = {}
+    
+    for model_type in model_types:
+        print(f"\nGenerating summaries using {model_type} model...")
+        generated_summaries = []
         
-        # Generate summary using our custom transformer
-        _, summary = summarize(model, text, tokenizer, cfg.device, model_type="encoder_decoder")
+        for i, text in enumerate(example_texts):
+            print(f"\nExample {i + 1}:")
+            print(f"Input text: {text[:100]}...")
+            
+            # Generate summary using the current model
+            _, summary = summarize(models[model_type], text, tokenizer, cfg.device, model_type=model_type)
+            
+            if summary:
+                print(f"Generated summary: {summary}")
+                generated_summaries.append(summary)
+            else:
+                print("Failed to generate summary")
+                generated_summaries.append("")  # Add empty string for failed summaries
         
-        if summary:
-            print(f"Generated summary: {summary}")
-            generated_summaries.append(summary)
-        else:
-            print("Failed to generate summary")
-            generated_summaries.append("")  # Add empty string for failed summaries
+        # Calculate and plot ROUGE scores for this model
+        print(f"\nCalculating ROUGE scores for {model_type} model...")
+        rouge_scores = calculate_rouge_scores(generated_summaries, ground_truth_summaries)
+        all_rouge_scores[model_type] = rouge_scores
+        
+        print(f"\nROUGE Scores for {model_type} model:")
+        for metric, score in rouge_scores.items():
+            print(f"{metric}: {score:.4f}")
+        
+        # Plot ROUGE scores for this model
+        plot_rouge_scores(rouge_scores, save_path=f"plots/rouge_scores_{model_type}.png")
     
-    # Calculate and plot ROUGE scores
-    print("\nCalculating ROUGE scores...")
-    rouge_scores = calculate_rouge_scores(generated_summaries, ground_truth_summaries)
-    print("\nROUGE Scores:")
-    for metric, score in rouge_scores.items():
-        print(f"{metric}: {score:.4f}")
+    # Plot comparison of ROUGE scores across models
+    print("\nPlotting comparison of ROUGE scores across models...")
+    # This would require modifying the plot_rouge_scores function to handle multiple models
+    # For now, we'll just print the comparison
+    print("\nROUGE Score Comparison:")
+    print("Model Type | ROUGE-1 | ROUGE-2 | ROUGE-L")
+    print("-" * 40)
+    for model_type, scores in all_rouge_scores.items():
+        print(f"{model_type:12} | {scores['rouge1']:.4f} | {scores['rouge2']:.4f} | {scores['rougeL']:.4f}")
     
-    # Plot ROUGE scores
-    plot_rouge_scores(rouge_scores, save_path="plots/rouge_scores.png")
-    
-    # Save model if configured
+    # Save models if configured
     if cfg.save_model:
-        print("\nSaving model...")
+        print("\nSaving models...")
         try:
-            torch.save(model.state_dict(), "models/transformer_summarization.pth")
-            print("Model saved successfully!")
+            torch.save(lstm_model.state_dict(), "models/lstm_summarization.pth")
+            torch.save(decoder_only_model.state_dict(), "models/decoder_only_summarization.pth")
+            torch.save(encoder_decoder_model.state_dict(), "models/encoder_decoder_summarization.pth")
+            print("Models saved successfully!")
         except Exception as e:
-            print(f"Failed to save model with error: {e}")
+            print(f"Failed to save models with error: {e}")
         
         # Save tokenizer
         try:

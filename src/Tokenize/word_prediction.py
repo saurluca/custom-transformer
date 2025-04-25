@@ -143,9 +143,14 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, model_typ
         inputs = inputs.to(device)
         targets = targets.to(device)
         
-        # Create masks for transformer models
-        if model_type in ["transformer", "decoder_only"]:
-            # Create attention masks
+        # Forward pass based on model type
+        optimizer.zero_grad()
+        
+        if model_type == "lstm":
+            # LSTM model only takes input and returns output and hidden state
+            outputs, _ = model(inputs)
+        elif model_type in ["transformer", "decoder_only"]:
+            # Create attention masks for transformer models
             src_seq_len = inputs.size(1)
             tgt_seq_len = targets.size(1)
             
@@ -159,18 +164,9 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, model_typ
             # Cross attention mask (allows decoder to attend to all encoder positions)
             if model_type == "transformer":
                 cross_mask = torch.ones((tgt_seq_len, src_seq_len), device=device).bool()
-            else:
-                cross_mask = None
-        
-        # Forward pass
-        optimizer.zero_grad()
-        
-        if model_type == "lstm":
-            outputs, _ = model(inputs)
-        elif model_type == "transformer":
-            outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
-        elif model_type == "decoder_only":
-            outputs = model(inputs, targets, src_mask, tgt_mask)
+                outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
+            else:  # decoder_only
+                outputs = model(inputs, tgt_mask)
         else:
             raise ValueError(f"Unknown model type: {model_type}")
         
@@ -238,9 +234,12 @@ def evaluate_model(model, test_loader, criterion, device, model_type="lstm"):
             inputs = inputs.to(device)
             targets = targets.to(device)
             
-            # Create masks for transformer models
-            if model_type in ["transformer", "decoder_only"]:
-                # Create attention masks
+            # Forward pass based on model type
+            if model_type == "lstm":
+                # LSTM model only takes input and returns output and hidden state
+                outputs, _ = model(inputs)
+            elif model_type in ["transformer", "decoder_only"]:
+                # Create attention masks for transformer models
                 src_seq_len = inputs.size(1)
                 tgt_seq_len = targets.size(1)
                 
@@ -254,16 +253,9 @@ def evaluate_model(model, test_loader, criterion, device, model_type="lstm"):
                 # Cross attention mask (allows decoder to attend to all encoder positions)
                 if model_type == "transformer":
                     cross_mask = torch.ones((tgt_seq_len, src_seq_len), device=device).bool()
-                else:
-                    cross_mask = None
-            
-            # Forward pass
-            if model_type == "lstm":
-                outputs, _ = model(inputs)
-            elif model_type == "transformer":
-                outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
-            elif model_type == "decoder_only":
-                outputs = model(inputs, targets, src_mask, tgt_mask)
+                    outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
+                else:  # decoder_only
+                    outputs = model(inputs, tgt_mask)
             else:
                 raise ValueError(f"Unknown model type: {model_type}")
             
@@ -296,12 +288,28 @@ def train_model(
     train_losses = []
     test_losses = []
 
+    # Determine model type from the model class
+    if isinstance(model, LSTMLanguageModel):
+        model_type = "lstm"
+    elif isinstance(model, Transformer):
+        # Check if it's a decoder-only model by looking at the forward method signature
+        import inspect
+        sig = inspect.signature(model.forward)
+        if len(sig.parameters) == 2:  # Only takes input and mask
+            model_type = "decoder_only"
+        else:
+            model_type = "transformer"
+    else:
+        model_type = cfg.model_type  # Fallback to config
+
+    print(f"Training model type: {model_type}")
+
     for epoch in range(cfg.num_epochs):
         train_loss = train_one_epoch(
-            model, train_loader, criterion, optimizer, cfg.device, cfg.model_type
+            model, train_loader, criterion, optimizer, cfg.device, model_type
         )
         test_loss = evaluate_model(
-            model, test_loader, criterion, cfg.device, cfg.model_type
+            model, test_loader, criterion, cfg.device, model_type
         )
 
         train_losses.append(train_loss)
@@ -323,12 +331,14 @@ def train_model(
                 input_text = tokenizer.decode(inputs[0].tolist(), skip_special_tokens=True)
                 print(f"Input Text: {input_text}")
                 
-                # Generate summary using encoder-decoder model
-                _, generated_summary = summarize_encoder_decoder(
+                # Generate summary using the appropriate model type
+                from Summary.summarization import summarize
+                _, generated_summary = summarize(
                     model,
                     input_text,
                     tokenizer,
                     cfg.device,
+                    model_type=model_type,
                     max_length=cfg.output_length
                 )
                 print(f"Generated Summary: {generated_summary}")
