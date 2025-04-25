@@ -1,0 +1,4 @@
+# Abstract
+
+In this "Advanced NLP" course project at Osnabrück University, we explored Transformer models by constructing decoder-only and encoder-decoder architectures using PyTorch. The goal was to gain practical experience with these models. We tested them in machine translation and summarisation tasks. We evaluated performance using BLEU and ROUGE metrics, developing components like attention mechanisms and positional encodings from scratch to analyse their functionality compared to a baseline LSTM. The datasets used are the Gutenberg Corpus from NLTK, WMT14, and XL-Sum. Despite computational and time limitations, this project provided valuable insights into the architecture of Transformers, their usage in the context of NLP tasks, and their limitations, particularly in terms of data requirements and computational cost. It was surprising how well the LSTM performed on our text generation task, especially regarding its smaller parameter size.
+
