@@ -4,13 +4,30 @@ import torch
 cfg = SimpleNamespace(**{})
 
 # run config
-cfg.save_model = False
+cfg.save_model = True
 cfg.generate_samples = True # generate sample text based on example prompts
 cfg.example_prompts = ["The man who", "The thing that", "I love "]
 
 # data
 cfg.text_names = [
     "gutenberg-austen-emma.txt",
+    "gutenberg-austen-persuasion.txt",
+    "gutenberg-austen-sense.txt",
+    "gutenberg-bible-kjv.txt",
+    "gutenberg-blake-poems.txt",
+    "gutenberg-bryant-stories.txt",
+    "gutenberg-burgess-busterbrown.txt",
+    "gutenberg-carroll-alice.txt",
+    "gutenberg-chesterton-ball.txt",
+    "gutenberg-chesterton-brown.txt",   
+    "gutenberg-chesterton-thursday.txt",
+    "gutenberg-edgeworth-parents.txt",
+    "gutenberg-melville-moby_dick.txt",
+    "gutenberg-milton-paradise.txt",
+    "gutenberg-shakespeare-caesar.txt",
+    "gutenberg-shakespeare-hamlet.txt",
+    "gutenberg-shakespeare-macbeth.txt",
+    "gutenberg-whitman-leaves.txt",
     # "webtext-grail.txt",
 ]  # "webtext-overheard.txt", "gutenberg-austen-emma.txt"
 cfg.max_chars_per_text = 20000  # Limit each text to num of characters
@@ -22,15 +39,15 @@ cfg.use_pretrained = False
 cfg.pretrained_model = "bert-base-uncased"
 
 # training
-cfg.batch_size = 128
-cfg.num_epochs = 4
+cfg.batch_size = 32  # Reduced batch size for testing
+cfg.num_epochs = 1   # Reduced epochs for testing
 cfg.num_workers = 2
 cfg.learning_rate = 0.0001
 cfg.weight_decay = 0.0001
 cfg.loss_fn = "CrossEntropyLoss"  # "CrossEntropyLoss", "NLL"
 
 # Transformer model
-cfg.model_type = "lstm"  # "decoder", "transformer", "lstm"
+cfg.model_type = "transformer"  # "decoder", "transformer", "lstm"
 cfg.d_model = 256 # model dimension
 cfg.num_layers = 2 # number of layers, same for encoder and decoder
 cfg.num_heads = 8 # number of attention heads
@@ -54,3 +71,13 @@ cfg.sampling_strategy = "multinomial"  # "multinomial", "greedy", "top-k", "top-
 cfg.show_top_k = False
 
 cfg.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+# Translation 
+cfg.translation_tokenizer =  "Helsinki-NLP/opus-mt-de-en"
+
+# Summarization
+cfg.summarization_tokenizer = "facebook/bart-large-cnn"
+
+# Select mode:
+cfg.mode = "summarization" # Select the task to perform for model; available tasks: ["next-word-generation", "summarization", "translation"]

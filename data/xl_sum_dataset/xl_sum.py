@@ -6,30 +6,28 @@ from transformers import AutoTokenizer
 import os
 from tqdm import tqdm
 
-def preprocess_wmt14(split, tokenizer, source_lang="en", target_lang="de", max_length=100):
+def preprocess_dataset_xl_sum(split, tokenizer, max_length=100):
     """
     Preprocess the WMT14 dataset for training.
 
     Args:
         split (str): Dataset split to preprocess ("train", "validation", "test").
         tokenizer: Tokenizer instance for tokenizing text.
-        source_lang (str): Source language code (e.g., "en").
-        target_lang (str): Target language code (e.g., "de").
         max_length (int): Maximum sequence length.
 
     Returns:
         List of tokenized input-output pairs.
     """
-    # Load the WMT14 dataset
-    dataset = load_dataset("wmt14", "de-en", split=split)
+    # Load the xl-sum dataset
+    dataset =load_dataset("csebuetnlp/xlsum",name='english', split = split)
 
     tokenized_data = []
     for example in tqdm(dataset, desc=f"Preprocessing {split} split"):
         # Extract source and target sentences dynamically
-        src_text = example["translation"][source_lang]
-        tgt_text = example["translation"][target_lang]
+        src_text = example["title"]
+        tgt_text = example["summary"]
 
-        # Tokenize and truncate
+        # Tokenize 
         src_tokens = tokenizer.encode(src_text, max_length=max_length)
         tgt_tokens = tokenizer.encode(tgt_text, max_length=max_length)
 
@@ -37,7 +35,7 @@ def preprocess_wmt14(split, tokenizer, source_lang="en", target_lang="de", max_l
 
     return tokenized_data
 
-def save_preprocessed_data(data, save_path):
+def save_preprocessed_data_xl_sum(data, save_path):
     """
     Save preprocessed data to a JSON file.
 
@@ -53,7 +51,7 @@ def save_preprocessed_data(data, save_path):
             json.dump({"src": src_tokens, "tgt": tgt_tokens}, f)
             f.write("\n")
 
-def load_preprocessed_data(file_path, lines):
+def load_preprocessed_data_xl_sum(file_path, lines):
     """
     Load preprocessed data from a JSON file.
 
@@ -70,7 +68,7 @@ def load_preprocessed_data(file_path, lines):
             data.append((example["src"], example["tgt"]))
     return data
 
-def prepare_dataloader(data, batch_size=32, max_length=50):
+def prepare_dataloader_xl_sum(data, batch_size=32, max_length=50):
     """
     Prepare a DataLoader for training.
 
@@ -84,41 +82,40 @@ def prepare_dataloader(data, batch_size=32, max_length=50):
     """
     inputs_list, targets_list = zip(*data)
 
-    inputs = []
-    targets = []
+    # Convert lists to tensors and pad sequences
+    def pad_sequence(sequences, max_len):
+        padded = []
+        for seq in tqdm(sequences, desc="Padding Inputs"):
+            if isinstance(seq, list):
+                seq = torch.tensor(seq, dtype=torch.long)
+            if len(seq) > max_len:
+                seq = seq[:max_len]
+            else:
+                padding = torch.zeros(max_len - len(seq), dtype=torch.long)
+                seq = torch.cat([seq, padding])
+            padded.append(seq)
+        return torch.stack(padded)
 
-    inputs.extend(
-        seq + [0] * (max_length - len(seq))
-        for seq in tqdm(inputs_list, desc="Padding Inputs")
-    )
-    targets.extend(
-        seq + [0] * (max_length - len(seq))
-        for seq in tqdm(targets_list, desc="Padding Inputs")
-    )
-
-    # Convert to tensors
-    inputs = torch.tensor(inputs, dtype=torch.long)
-    targets = torch.tensor(targets, dtype=torch.long)
+    # Pad sequences
+    inputs = pad_sequence(inputs_list, max_length)
+    targets = pad_sequence(targets_list, max_length)
 
     # Create DataLoader
     dataset = TensorDataset(inputs, targets)
-
     return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-def count_json_lines(file_path):
+def count_json_lines_xl_sum(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         return sum(1 for _ in f)
 
-def load_or_preprocess_wmt14_data(
+def load_or_preprocess_xl_sum_data(
     split,
     tokenizer,
     dataset_dir,
-    source_lang="en",
-    target_lang="de",
     max_length=100,
 ):
     """
-    Load preprocessed WMT14 data if it exists, otherwise preprocess and save it.
+    Load preprocessed xl-sum data if it exists, otherwise preprocess and save it.
 
     Args:
         split (str): Dataset split to load or preprocess (e.g., "train", "validation", "test[:5%]").
@@ -132,20 +129,20 @@ def load_or_preprocess_wmt14_data(
         List of tokenized input-output pairs.
     """
     # Construct the file path for the preprocessed data
-    file_path = os.path.join(dataset_dir, f"{split}_{source_lang}-{target_lang}.json")
+    file_path = os.path.join(dataset_dir, f"{split}_summarization.json")
 
     # Check if the preprocessed data exists
     if os.path.exists(file_path):
-        print(f"Loading preprocessed WMT14 data from {file_path}...")
-        num_lines = count_json_lines(file_path)
-        return load_preprocessed_data(file_path, lines=num_lines)
+        print(f"Loading preprocessed XL-sum data from {file_path}...")
+        num_lines = count_json_lines_xl_sum(file_path)
+        return load_preprocessed_data_xl_sum(file_path, lines=num_lines)
 
     # If not, preprocess the data
-    print(f"Preprocessing WMT14 dataset ({split}) for {source_lang}-{target_lang}...")
-    data = preprocess_wmt14(split, tokenizer, source_lang, target_lang, max_length)
+    print(f"Preprocessing XL-sum dataset ({split}) for summarization...")
+    data = preprocess_dataset_xl_sum(split, tokenizer, max_length)
 
     # Save the preprocessed data
-    save_preprocessed_data(data, file_path)
+    save_preprocessed_data_xl_sum(data, file_path)
     print(f"Preprocessed WMT14 data saved to {file_path}.")
 
     return data

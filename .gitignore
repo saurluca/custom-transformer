@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+.env
 
 # custom
 plots/*
@@ -15,5 +16,10 @@ models/*
 
 # prevent lock files 
 *.lock
+*.pdm-python 
+*.uv
+*.json
 
-*.json 
+
+# prevent python version files 
+*.python-version
