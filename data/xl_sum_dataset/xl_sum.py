@@ -82,25 +82,26 @@ def prepare_dataloader_xl_sum(data, batch_size=32, max_length=50):
     """
     inputs_list, targets_list = zip(*data)
 
-    inputs = []
-    targets = []
+    # Convert lists to tensors and pad sequences
+    def pad_sequence(sequences, max_len):
+        padded = []
+        for seq in tqdm(sequences, desc="Padding Inputs"):
+            if isinstance(seq, list):
+                seq = torch.tensor(seq, dtype=torch.long)
+            if len(seq) > max_len:
+                seq = seq[:max_len]
+            else:
+                padding = torch.zeros(max_len - len(seq), dtype=torch.long)
+                seq = torch.cat([seq, padding])
+            padded.append(seq)
+        return torch.stack(padded)
 
-    inputs.extend(
-        seq + [0] * (max_length - len(seq))
-        for seq in tqdm(inputs_list, desc="Padding Inputs")
-    )
-    targets.extend(
-        seq + [0] * (max_length - len(seq))
-        for seq in tqdm(targets_list, desc="Padding Inputs")
-    )
-
-    # Convert to tensors
-    inputs = torch.tensor(inputs, dtype=torch.long)
-    targets = torch.tensor(targets, dtype=torch.long)
+    # Pad sequences
+    inputs = pad_sequence(inputs_list, max_length)
+    targets = pad_sequence(targets_list, max_length)
 
     # Create DataLoader
     dataset = TensorDataset(inputs, targets)
-
     return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 def count_json_lines_xl_sum(file_path):

@@ -16,6 +16,7 @@ from Translation.translator import translate_lstm, translate_decoder_only, trans
 from Tokenize.word_prediction import (
     get_texts,
     prepare_sequences,
+    prepare_summarization_sequences,
     init_loss_fn,
     train_model,
     plot_loss,
@@ -130,93 +131,130 @@ def Translator():
     print("-" * 50)
 
 def Summarization():
+    print('Summarization mode')
     """
-    Test the three translation functions using the xl-sum dataset.
+    Train and evaluate summarization model using the XL-sum dataset.
     """
-    print("\nTesting translation functions...")
-    # Load and preprocess the WMT14 dataset
-    tokenizer_name = "google/flan-t5-large"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-    print("Preprocessing xl-sum dataset...")
-    test_data = preprocess_dataset_xl_sum("test[:5%]", tokenizer) 
-    test_loader = prepare_dataloader_xl_sum(test_data, batch_size=1)
-
-    # Extract example input texts
+    print("\nStarting summarization task...")
+    
+    # Load the tokenizer
+    print(f"Loading tokenizer: {cfg.summarization_tokenizer}")
+    tokenizer = AutoTokenizer.from_pretrained(cfg.summarization_tokenizer)
+    
+    # Define dataset directory
+    dataset_dir = "data/xl_sum_dataset/preprocessed"
+    os.makedirs(dataset_dir, exist_ok=True)
+    
+    # Load or preprocess the dataset - using a much smaller subset for testing
+    print("Loading or preprocessing XL-sum dataset (small subset for testing)...")
+    train_data = load_or_preprocess_xl_sum_data("train[:1%]", tokenizer, dataset_dir, max_length=cfg.max_seq_length)
+    test_data = load_or_preprocess_xl_sum_data("test[:1%]", tokenizer, dataset_dir, max_length=cfg.max_seq_length)
+    
+    # Prepare dataloaders
+    print("Preparing dataloaders...")
+    train_loader = prepare_dataloader_xl_sum(train_data, batch_size=cfg.batch_size, max_length=cfg.max_seq_length)
+    test_loader = prepare_dataloader_xl_sum(test_data, batch_size=cfg.batch_size, max_length=cfg.max_seq_length)
+    
+    # Initialize model
+    print("Initializing encoder-decoder Transformer model...")
+    vocab_size = len(tokenizer)
+    
+    # Encoder-Decoder Transformer Model
+    model = Transformer(
+        vocab_size=vocab_size,
+        d_model=cfg.d_model,
+        num_heads=cfg.num_heads,
+        num_layers=cfg.num_layers,
+        d_ff=cfg.d_ff,
+        max_seq_length=cfg.max_seq_length,
+        dropout=cfg.dropout
+    ).to(cfg.device)
+    
+    # Initialize loss function and optimizer
+    criterion = init_loss_fn(cfg.loss_fn)
+    optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
+    
+    # Train model
+    print("Training Encoder-Decoder Transformer model...")
+    train_losses, test_losses = train_model(
+        model, train_loader, test_loader, tokenizer, optimizer, criterion, cfg
+    )
+    
+    # Plot loss curves
+    print("Plotting loss curves...")
+    plot_loss(train_losses, test_losses, save_path="plots/transformer_summarization_loss.png")
+    
+    # Save model if configured
+    if cfg.save_model:
+        print("Saving model...")
+        try:
+            torch.save(model.state_dict(), "models/transformer_summarization.pth")
+            print("Model saved successfully!")
+        except Exception as e:
+            print(f"Failed to save model with error: {e}")
+        
+        # Save tokenizer
+        try:
+            tokenizer.save_pretrained("models/summarization_tokenizer")
+            print("Tokenizer saved successfully!")
+        except Exception as e:
+            print(f"Failed to save tokenizer with error: {e}")
+        
+        # Save config
+        with open("models/config_summarization.json", "w") as f:
+            json.dump(cfg.__dict__, f)
+        print("Config saved to models/config_summarization.json")
+    
+    # Test summarization on example texts
+    print("\nTesting summarization on example texts...")
+    
+    # Get a few examples from the test set
     example_inputs = []
     for batch in test_loader:
         src, tgt = batch
-        example_inputs.append((src.squeeze(0).tolist(), tgt.squeeze(0).tolist()))
-        if len(example_inputs) >= 5:  # Limit to 3 examples for testing
+        # Convert tensors to lists directly using PyTorch
+        src_list = src.squeeze(0).cpu().tolist()
+        tgt_list = tgt.squeeze(0).cpu().tolist()
+        example_inputs.append((src_list, tgt_list))
+        if len(example_inputs) >= 3:  # Limit to 3 examples for testing
             break
-
+    
     # Decode the example inputs for readability
-    example_texts = [tokenizer.decode(src, skip_special_tokens=True) for src, _ in example_inputs]
-    print("Example Input Texts:", example_texts)
-
-    # Initialize models
-    print("Initializing models...")
-    vocab_size = len(tokenizer)
-    embedding_dim = cfg.embedding_dim_lstm
-    hidden_dim = cfg.hidden_dim_lstm
-    num_layers = cfg.num_layers_lstm
-    dropout = cfg.dropout_lstm
-
-
-
-    #TODO train the model before testing
-    # LSTM Model
-    lstm_model = LSTMLanguageModel(vocab_size, embedding_dim, hidden_dim, num_layers, dropout).to(cfg.device)
-
-    # Decoder-Only Transformer Model
-    decoder_only_model = Transformer(
-        vocab_size, d_model=cfg.d_model, num_heads=cfg.num_heads, num_layers=cfg.num_layers,
-        d_ff=cfg.d_ff, max_seq_length=cfg.max_seq_length, dropout=cfg.dropout
-    ).to(cfg.device)
-
-    # Encoder-Decoder Transformer Model
-    encoder_decoder_model = Transformer(
-        vocab_size, d_model=cfg.d_model, num_heads=cfg.num_heads, num_layers=cfg.num_layers,
-        d_ff=cfg.d_ff, max_seq_length=cfg.max_seq_length, dropout=cfg.dropout
-    ).to(cfg.device)
-
-    # Test translation functions
-    for i, input_text in enumerate(example_texts):
-        print(f"\nExample {i + 1}:")
-        print(f"Input Text: {input_text}")
-
-        # Translate using LSTM
-        translated_lstm = summarize_lstm(lstm_model, input_text, tokenizer, cfg.device, max_length=50)
-        print(f"LSTM Translation: {translated_lstm}")
-
-        # Translate using Decoder-Only Transformer
-        translated_decoder_only = summarize_decoder_only(decoder_only_model, input_text, tokenizer, cfg.device, max_length=50)
-        print(f"Decoder-Only Transformer Translation: {translated_decoder_only}")
-
-        # Translate using Encoder-Decoder Transformer
-        translated_encoder_decoder = summarize_encoder_decoder(encoder_decoder_model, input_text, tokenizer, cfg.device, max_length=50)
-        print(f"Encoder-Decoder Transformer Translation: {translated_encoder_decoder}")
-
-    if cfg.save_model:
-        print("Saving model...")
-        # save model
-        try : 
-            torch.save(model.state_dict(), "models/model_summarization.pth")
-            print("The model has been saved successfully!")
-        except Exception as e :
-            print(f"failed with the error message: {e}") 
-        # save tokenizer
-        try :
-            torch.save(tokenizer, "models/tokenizer_summarization.pth")
-            print("The tokenizer has been saved successfully!")
-        except Exception as e:
-            print(f"failed with the error message: {e}")
+    example_texts = []
+    example_summaries = []
+    for src, tgt in example_inputs:
+        # Filter out padding tokens (0)
+        src_tokens = [t for t in src if t != 0]
+        tgt_tokens = [t for t in tgt if t != 0]
         
-        # save config
-        with open("models/config_summarization.json", "w") as f:
-            json.dump(cfg, f)
-        print("Model, tokenizer, and config saved to models")    
-
-        print("-" * 50)
+        # Convert token IDs to strings one at a time
+        src_text = tokenizer.convert_tokens_to_string([tokenizer.convert_ids_to_tokens(t) for t in src_tokens])
+        tgt_text = tokenizer.convert_tokens_to_string([tokenizer.convert_ids_to_tokens(t) for t in tgt_tokens])
+        
+        example_texts.append(src_text)
+        example_summaries.append(tgt_text)
+    
+    print("\nExample Input Texts and Ground Truth Summaries:")
+    for i, (text, summary) in enumerate(zip(example_texts, example_summaries)):
+        print(f"\nExample {i+1}:")
+        print(f"Input Text: {text}")
+        print(f"Ground Truth Summary: {summary}")
+    
+    # Test summarization with the model
+    print("\nTesting summarization with Encoder-Decoder Transformer:")
+    for i, input_text in enumerate(example_texts):
+        print(f"\nExample {i+1}:")
+        print(f"Input Text: {input_text}")
+        
+        # Summarize using Encoder-Decoder Transformer
+        _, generated_summary = summarize_encoder_decoder(model, input_text, tokenizer, cfg.device, max_length=50)
+        print(f"Generated Summary: {generated_summary}")
+        
+        # Calculate BLEU score
+        bleu_score = calculate_bleu([generated_summary], [example_summaries[i]])
+        print(f"BLEU Score: {bleu_score:.4f}")
+    
+    print("-" * 50)
 
 
 
@@ -234,9 +272,9 @@ def next_word_generator():
         pretrained_model=cfg.pretrained_model,
     )
     vocab_size = len(tokenizer)
-    print(f"Vocabulary size: {vocab_size}")
-    print("First 10 words in vocabulary:", list(tokenizer.vocab.keys())[:10])
-
+    # print(f"Vocabulary size: {vocab_size}")
+    # print("First 10 words in vocabulary:", list(tokenizer.vocab.keys())[:10])
+    
     print("Preparing sequences...")
     sequences = prepare_sequences(texts, tokenizer, seq_length=cfg.seq_length)
 
@@ -325,7 +363,9 @@ if __name__ == "__main__":
     
     if cfg.mode == "next-word-generation":
         next_word_generator()
-    if cfg.mode == "summarization":
+    elif cfg.mode == "summarization":
         Summarization()
-    if cfg.mode == "translation":
+    elif cfg.mode == "translation":
         Translator()
+    else:
+        print(f"Unknown mode: {cfg.mode}. Available modes: next-word-generation, summarization, translation")
