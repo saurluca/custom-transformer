@@ -1,5 +1,4 @@
 import torch
-from transformers import BartForConditionalGeneration, BartTokenizer
 
 
 def summarize_lstm(model, input_text, tokenizer, device, max_length=50):

@@ -2,17 +2,14 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import json
-import nltk
 import sys
 import os
-import certifi
-from huggingface_hub import login
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
 # from dotenv import load_dotenv
-from transformers import AutoTokenizer, BartForConditionalGeneration
+from transformers import AutoTokenizer
 
 # Add src directory to Python path
 sys.path.append('src')
@@ -20,21 +17,16 @@ sys.path.append('src')
 from LSTM.lstm import LSTMLanguageModel
 from Transformer.transformer import Transformer
 from Summary.summarization import (
-    summarize_lstm,
-    summarize_decoder_only,
-    summarize_encoder_decoder,
     summarize,
 )
 from Translation.translator import (
     translate_lstm,
     translate_decoder_only,
     translate_encoder_decoder,
-    translate,
 )
 from Tokenize.word_prediction import (
     get_texts,
     prepare_sequences,
-    prepare_summarization_sequences,
     init_loss_fn,
     train_model,
     plot_loss,
@@ -44,15 +36,10 @@ from Tokenize.word_prediction import (
 from Config.config import cfg
 from Tokenize.word_tokenizer import WordTokenizer
 from data.xl_sum_dataset.xl_sum import (
-    preprocess_dataset_xl_sum,
-    save_preprocessed_data_xl_sum,
-    load_preprocessed_data_xl_sum,
     prepare_dataloader_xl_sum,
-    count_json_lines_xl_sum,
     load_or_preprocess_xl_sum_data,
 )
 from data.wmt14_dataset.wmt14 import preprocess_wmt14, prepare_dataloader
-from Evaluation.bleu_score import calculate_bleu
 from Evaluation.rouge_score import calculate_rouge_scores, plot_rouge_scores
 
 # load_dotenv()

@@ -2,7 +2,6 @@ import torch
 import json
 from datasets import load_dataset
 from torch.utils.data import DataLoader, TensorDataset
-from transformers import AutoTokenizer
 import os
 from tqdm import tqdm
 

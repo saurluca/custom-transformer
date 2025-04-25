@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForSeq2SeqGeneration
 import matplotlib.pyplot as plt
 import evaluate
