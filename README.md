@@ -200,10 +200,10 @@ Luca Saur:
 [mail@lucasaur.com](mailto:mail@lucasaur.com)
 
 Jeelka Hessenius:
-[mail@lucasaur.com](mailto:jhessenius@uni-osnabrueck.de)
+[mailto:jhessenius@uni-osnabrueck.de](mailto:jhessenius@uni-osnabrueck.de)
 
 Florian Weigandt:
-[mail@lucasaur.com](mailto:fweigandt@uni-osnabrueck.de)
+[fweigandt@uni-osnabrueck.de](mailto:fweigandt@uni-osnabrueck.de)
 
 
 
