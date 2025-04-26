@@ -194,7 +194,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 For questions or feedback, please open an issue on GitHub or contact one of the contributors:
 
 Seyedalireza Yaghoubi:
-[syaghoubi@uni-osnabreuck.com](mailto:Syaghoubi@uni-osnabrueck.de)
+[syaghoubi@uni-osnabreuck.de](mailto:Syaghoubi@uni-osnabrueck.de)
 
 Luca Saur:
 [mail@lucasaur.com](mailto:mail@lucasaur.com)
