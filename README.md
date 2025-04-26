@@ -7,6 +7,7 @@
 ## 📋 Overview
 
 Custom Transformer is a comprehensive implementation of transformer-based neural architectures for various natural language processing tasks. This project provides a flexible framework for experimenting with different transformer variants, including encoder-decoder, decoder-only, and LSTM models, for tasks such as text summarization, translation, and next-word prediction.
+
 you can find the paper [here](https://drive.google.com/file/d/1UbHl6D5zd0tBXhzIzMzIyhE1e9eAh65m/view?usp=share_link)
 
 ## ✨ Features
