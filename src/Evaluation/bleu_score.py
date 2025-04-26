@@ -1,5 +1,6 @@
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
+
 def calculate_bleu(references, candidate, weights=(0.25, 0.25, 0.25, 0.25)):
     """
     Calculate the BLEU score for a candidate translation against one or more references.
@@ -14,9 +15,14 @@ def calculate_bleu(references, candidate, weights=(0.25, 0.25, 0.25, 0.25)):
     """
     # Use smoothing to handle cases with no n-gram matches
     smoothing_function = SmoothingFunction().method1
-    return sentence_bleu(references, candidate, weights, smoothing_function=smoothing_function)
+    return sentence_bleu(
+        references, candidate, weights, smoothing_function=smoothing_function
+    )
 
-def evaluate_bleu_batch(tokenized_translations, tokenized_references, weights=(0.25, 0.25, 0.25, 0.25)):
+
+def evaluate_bleu_batch(
+    tokenized_translations, tokenized_references, weights=(0.25, 0.25, 0.25, 0.25)
+):
     """
     Evaluate BLEU scores for a batch of tokenized translations.
 

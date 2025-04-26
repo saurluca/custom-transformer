@@ -1,5 +1,6 @@
 import torch
 
+
 def translate_lstm(model, input_text, tokenizer, device, max_length=50):
     """
     Translate a sequence using the LSTM language model.
@@ -20,7 +21,9 @@ def translate_lstm(model, input_text, tokenizer, device, max_length=50):
 
     # Encode the input text into token indices
     input_sequence = tokenizer.encode(input_text)
-    input_tensor = torch.tensor(input_sequence, dtype=torch.long).unsqueeze(0).to(device)  # [1, seq_len]
+    input_tensor = (
+        torch.tensor(input_sequence, dtype=torch.long).unsqueeze(0).to(device)
+    )  # [1, seq_len]
     hidden = model.init_hidden(batch_size=1, device=device)
 
     translated_tokens = []
@@ -30,13 +33,15 @@ def translate_lstm(model, input_text, tokenizer, device, max_length=50):
         for _ in range(max_length):
             # Forward pass through the model
             output, hidden = model(current_input, hidden)
-            
+
             # Get the token with the highest probability (greedy decoding)
             next_token = output[:, -1, :].argmax(dim=-1).item()
             translated_tokens.append(next_token)
 
             # Stop if the end-of-sequence token is generated
-            if next_token == tokenizer.vocab.get("[SEP]", tokenizer.vocab.get("</s>", None)):
+            if next_token == tokenizer.vocab.get(
+                "[SEP]", tokenizer.vocab.get("</s>", None)
+            ):
                 break
 
             # Prepare the next input (use the last predicted token)
@@ -67,7 +72,9 @@ def translate_decoder_only(model, input_text, tokenizer, device, max_length=50):
 
     # Encode the input text into token indices
     input_sequence = tokenizer.encode(input_text)
-    input_tensor = torch.tensor(input_sequence, dtype=torch.long).unsqueeze(0).to(device)  # [1, seq_len]
+    input_tensor = (
+        torch.tensor(input_sequence, dtype=torch.long).unsqueeze(0).to(device)
+    )  # [1, seq_len]
 
     generated_tokens = input_sequence  # Start with the input sequence
     current_input = input_tensor
@@ -75,14 +82,18 @@ def translate_decoder_only(model, input_text, tokenizer, device, max_length=50):
     with torch.no_grad():
         for _ in range(max_length):
             # Forward pass through the model
-            output = model(current_input, tgt_mask=None)  # No mask needed for decoder-only models
+            output = model(
+                current_input, tgt_mask=None
+            )  # No mask needed for decoder-only models
 
             # Get the token with the highest probability (greedy decoding)
             next_token = output[:, -1, :].argmax(dim=-1).item()
             generated_tokens.append(next_token)
 
             # Stop if the end-of-sequence token is generated
-            if next_token == tokenizer.vocab.get("[SEP]", tokenizer.vocab.get("</s>", None)):
+            if next_token == tokenizer.vocab.get(
+                "[SEP]", tokenizer.vocab.get("</s>", None)
+            ):
                 break
 
             # Prepare the next input (use the last predicted token)
@@ -113,7 +124,9 @@ def translate_encoder_decoder(model, input_text, tokenizer, device, max_length=5
 
     # Encode the input text into token indices
     input_sequence = tokenizer.encode(input_text)
-    input_tensor = torch.tensor(input_sequence, dtype=torch.long).unsqueeze(0).to(device)  # [1, seq_len]
+    input_tensor = (
+        torch.tensor(input_sequence, dtype=torch.long).unsqueeze(0).to(device)
+    )  # [1, seq_len]
 
     # Generate the encoder output
     src_mask = None  # Add a source mask if needed
@@ -137,12 +150,18 @@ def translate_encoder_decoder(model, input_text, tokenizer, device, max_length=5
             generated_tokens.append(next_token)
 
             # Stop if the end-of-sequence token is generated
-            if next_token == tokenizer.vocab.get("[SEP]", tokenizer.vocab.get("</s>", None)):
+            if next_token == tokenizer.vocab.get(
+                "[SEP]", tokenizer.vocab.get("</s>", None)
+            ):
                 break
 
             # Append the next token to the decoder input
             decoder_input = torch.cat(
-                [decoder_input, torch.tensor([[next_token]], dtype=torch.long).to(device)], dim=1
+                [
+                    decoder_input,
+                    torch.tensor([[next_token]], dtype=torch.long).to(device),
+                ],
+                dim=1,
             )
 
     # Decode the generated tokens back to text
@@ -170,6 +189,8 @@ def translate(model, model_type, input_text, tokenizer, device, max_length=50):
     elif model_type == "decoder-only":
         return translate_decoder_only(model, input_text, tokenizer, device, max_length)
     elif model_type == "encoder-decoder":
-        return translate_encoder_decoder(model, input_text, tokenizer, device, max_length)
+        return translate_encoder_decoder(
+            model, input_text, tokenizer, device, max_length
+        )
     else:
         raise ValueError(f"Unsupported model type: {model_type}")

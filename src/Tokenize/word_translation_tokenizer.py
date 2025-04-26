@@ -2,6 +2,7 @@ from nltk.tokenize import word_tokenize
 from collections import Counter
 from transformers import AutoTokenizer
 
+
 class TranslationTokenizer:
     def __init__(
         self,
@@ -19,9 +20,13 @@ class TranslationTokenizer:
         self.target_idx2word = {0: "<pad>", 1: "<unk>", 2: "<s>", 3: "</s>"}
 
         if use_pretrained:
-            self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model, use_fast=True)
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                pretrained_model, use_fast=True
+            )
             self.source_vocab = self.tokenizer.get_vocab()
-            self.source_idx2word = {idx: token for token, idx in self.source_vocab.items()}
+            self.source_idx2word = {
+                idx: token for token, idx in self.source_vocab.items()
+            }
             # For target, you might still want a separate vocabulary or use the same if the model is multilingual
             # For simplicity, we'll create a separate one for now.
             target_word_counts = Counter()
@@ -78,12 +83,17 @@ class TranslationTokenizer:
             return self.tokenizer.encode(text).ids
         else:
             tokens = word_tokenize(text.lower())
-            return [self.source_vocab.get(token, self.source_vocab["<unk>"]) for token in tokens]
+            return [
+                self.source_vocab.get(token, self.source_vocab["<unk>"])
+                for token in tokens
+            ]
 
     def encode_target(self, text):
         """Convert target text to token indices"""
         tokens = word_tokenize(text.lower())
-        return [self.target_vocab.get(token, self.target_vocab["<unk>"]) for token in tokens]
+        return [
+            self.target_vocab.get(token, self.target_vocab["<unk>"]) for token in tokens
+        ]
 
     def decode_source(self, indices):
         """Convert source token indices back to text"""

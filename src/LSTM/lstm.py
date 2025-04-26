@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from Tokenize.word_tokenizer import WordTokenizer
 
 
 class LSTMLanguageModel(nn.Module):

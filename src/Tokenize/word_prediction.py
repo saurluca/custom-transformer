@@ -2,18 +2,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from nltk.corpus import webtext, gutenberg
-from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
 import sys
 from typing import List, Tuple
 
 
-sys.path.append('sys')
+sys.path.append("sys")
 
 from Transformer.transformer import Transformer, TransformerDecoder
 from LSTM.lstm import LSTMLanguageModel
-from Summary.summarization import summarize_encoder_decoder
 
 
 def prepare_sequences(texts, tokenizer, seq_length=10):
@@ -41,6 +39,7 @@ def prepare_sequences(texts, tokenizer, seq_length=10):
 
     # Convert to tensor
     return torch.tensor(sequences)
+
 
 def prepare_summarization_sequences(
     examples: List[Tuple[str, str]],  # List of (document, summary) pairs
@@ -72,7 +71,7 @@ def prepare_summarization_sequences(
         )
 
         input_sequences.append(input_tokens.squeeze(0))  # Remove batch dimension
-        target_sequences.append(target_tokens.squeeze(0)) # Remove batch dimension
+        target_sequences.append(target_tokens.squeeze(0))  # Remove batch dimension
 
     return list(zip(input_sequences, target_sequences))
 
@@ -109,10 +108,12 @@ def init_loss_fn(loss_fn):
         raise ValueError(f"Invalid loss function: {loss_fn}")
 
 
-def train_one_epoch(model, train_loader, criterion, optimizer, device, model_type="lstm"):
+def train_one_epoch(
+    model, train_loader, criterion, optimizer, device, model_type="lstm"
+):
     """
     Train the model for one epoch.
-    
+
     Args:
         model: The model to train
         train_loader: DataLoader containing training data
@@ -120,14 +121,14 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, model_typ
         optimizer: Optimizer for training
         device: Device to train on (cuda/cpu)
         model_type: Type of model ("lstm", "transformer", or "decoder_only")
-    
+
     Returns:
         float: Average training loss for the epoch
     """
     model.train()
     total_loss = 0
     num_batches = 0
-    
+
     for batch in train_loader:
         # Handle different batch formats
         if isinstance(batch, (list, tuple)) and len(batch) == 2:
@@ -138,14 +139,14 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, model_typ
             targets = batch[:, 1:]
         else:
             raise ValueError(f"Unexpected batch format: {type(batch)}")
-        
+
         # Move data to device
         inputs = inputs.to(device)
         targets = targets.to(device)
-        
+
         # Forward pass based on model type
         optimizer.zero_grad()
-        
+
         if model_type == "lstm":
             # LSTM model only takes input and returns output and hidden state
             outputs, _ = model(inputs)
@@ -153,41 +154,45 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, model_typ
             # Create attention masks for transformer models
             src_seq_len = inputs.size(1)
             tgt_seq_len = targets.size(1)
-            
+
             # Source attention mask (allows attending to all positions)
             src_mask = torch.ones((src_seq_len, src_seq_len), device=device).bool()
-            
+
             # Target attention mask (causal/triangular mask)
-            tgt_mask = ~torch.triu(torch.ones(tgt_seq_len, tgt_seq_len), diagonal=1).bool()
+            tgt_mask = ~torch.triu(
+                torch.ones(tgt_seq_len, tgt_seq_len), diagonal=1
+            ).bool()
             tgt_mask = tgt_mask.to(device)
-            
+
             # Cross attention mask (allows decoder to attend to all encoder positions)
             if model_type == "transformer":
-                cross_mask = torch.ones((tgt_seq_len, src_seq_len), device=device).bool()
+                cross_mask = torch.ones(
+                    (tgt_seq_len, src_seq_len), device=device
+                ).bool()
                 outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
             else:  # decoder_only
                 outputs = model(inputs, tgt_mask)
         else:
             raise ValueError(f"Unknown model type: {model_type}")
-        
+
         # Reshape outputs and targets for loss calculation
         outputs = outputs.view(-1, outputs.size(-1))
         targets = targets.view(-1)
-        
+
         # Calculate loss only on non-padding tokens
-        padding_mask = (targets != 0)
+        padding_mask = targets != 0
         if padding_mask.any():
             loss = criterion(outputs[padding_mask], targets[padding_mask])
         else:
             loss = torch.tensor(0.0, device=device)
-        
+
         # Backward pass and optimize
         loss.backward()
         optimizer.step()
-        
+
         total_loss += loss.item()
         num_batches += 1
-    
+
     return total_loss / max(num_batches, 1)
 
 
@@ -196,28 +201,32 @@ def generate_square_subsequent_mask(sz):
     Unmasked positions are filled with float(0.0).
     """
     mask = torch.triu(torch.ones(sz, sz), diagonal=1)
-    mask = mask.float().masked_fill(mask == 1, float('-inf')).masked_fill(mask == 0, float(0.0))
+    mask = (
+        mask.float()
+        .masked_fill(mask == 1, float("-inf"))
+        .masked_fill(mask == 0, float(0.0))
+    )
     return mask
 
 
 def evaluate_model(model, test_loader, criterion, device, model_type="lstm"):
     """
     Evaluate the model on the test set.
-    
+
     Args:
         model: The model to evaluate
         test_loader: DataLoader containing test data
         criterion: Loss function
         device: Device to evaluate on (cuda/cpu)
         model_type: Type of model ("lstm", "transformer", or "decoder_only")
-    
+
     Returns:
         float: Average test loss
     """
     model.eval()
     total_loss = 0
     num_batches = 0
-    
+
     with torch.no_grad():
         for batch in test_loader:
             # Handle different batch formats
@@ -229,11 +238,11 @@ def evaluate_model(model, test_loader, criterion, device, model_type="lstm"):
                 targets = batch[:, 1:]
             else:
                 raise ValueError(f"Unexpected batch format: {type(batch)}")
-            
+
             # Move data to device
             inputs = inputs.to(device)
             targets = targets.to(device)
-            
+
             # Forward pass based on model type
             if model_type == "lstm":
                 # LSTM model only takes input and returns output and hidden state
@@ -242,37 +251,41 @@ def evaluate_model(model, test_loader, criterion, device, model_type="lstm"):
                 # Create attention masks for transformer models
                 src_seq_len = inputs.size(1)
                 tgt_seq_len = targets.size(1)
-                
+
                 # Source attention mask (allows attending to all positions)
                 src_mask = torch.ones((src_seq_len, src_seq_len), device=device).bool()
-                
+
                 # Target attention mask (causal/triangular mask)
-                tgt_mask = ~torch.triu(torch.ones(tgt_seq_len, tgt_seq_len), diagonal=1).bool()
+                tgt_mask = ~torch.triu(
+                    torch.ones(tgt_seq_len, tgt_seq_len), diagonal=1
+                ).bool()
                 tgt_mask = tgt_mask.to(device)
-                
+
                 # Cross attention mask (allows decoder to attend to all encoder positions)
                 if model_type == "transformer":
-                    cross_mask = torch.ones((tgt_seq_len, src_seq_len), device=device).bool()
+                    cross_mask = torch.ones(
+                        (tgt_seq_len, src_seq_len), device=device
+                    ).bool()
                     outputs = model(inputs, targets, src_mask, tgt_mask, cross_mask)
                 else:  # decoder_only
                     outputs = model(inputs, tgt_mask)
             else:
                 raise ValueError(f"Unknown model type: {model_type}")
-            
+
             # Reshape outputs and targets for loss calculation
             outputs = outputs.view(-1, outputs.size(-1))
             targets = targets.view(-1)
-            
+
             # Calculate loss only on non-padding tokens
-            padding_mask = (targets != 0)
+            padding_mask = targets != 0
             if padding_mask.any():
                 loss = criterion(outputs[padding_mask], targets[padding_mask])
             else:
                 loss = torch.tensor(0.0, device=device)
-            
+
             total_loss += loss.item()
             num_batches += 1
-    
+
     return total_loss / max(num_batches, 1)
 
 
@@ -294,6 +307,7 @@ def train_model(
     elif isinstance(model, Transformer):
         # Check if it's a decoder-only model by looking at the forward method signature
         import inspect
+
         sig = inspect.signature(model.forward)
         if len(sig.parameters) == 2:  # Only takes input and mask
             model_type = "decoder_only"
@@ -328,18 +342,21 @@ def train_model(
             if isinstance(batch, (list, tuple)) and len(batch) == 2:
                 inputs, _ = batch
                 # Take the first example from the batch
-                input_text = tokenizer.decode(inputs[0].tolist(), skip_special_tokens=True)
+                input_text = tokenizer.decode(
+                    inputs[0].tolist(), skip_special_tokens=True
+                )
                 print(f"Input Text: {input_text}")
-                
+
                 # Generate summary using the appropriate model type
                 from Summary.summarization import summarize
+
                 _, generated_summary = summarize(
                     model,
                     input_text,
                     tokenizer,
                     cfg.device,
                     model_type=model_type,
-                    max_length=cfg.output_length
+                    max_length=cfg.output_length,
                 )
                 print(f"Generated Summary: {generated_summary}")
                 print("-" * 50)
@@ -432,9 +449,11 @@ def generate_text(
             next_token_logits = output[:, -1, :] / temperature
 
             # Set probability of token to 0 to prevent sampling it
-            if hasattr(tokenizer, 'use_pretrained') and not tokenizer.use_pretrained:
+            if hasattr(tokenizer, "use_pretrained") and not tokenizer.use_pretrained:
                 unk_idx = tokenizer.vocab["<unk>"]
-                next_token_logits[0, unk_idx] = float("-inf")  # Set to negative infinity
+                next_token_logits[0, unk_idx] = float(
+                    "-inf"
+                )  # Set to negative infinity
 
                 # Sample from the distribution
                 probs = F.softmax(next_token_logits, dim=-1)
@@ -442,12 +461,13 @@ def generate_text(
 
                 if show_top_k:
                     top_k_values, top_k_indices = torch.topk(probs, k=top_k, dim=-1)
-                    top_k_tokens = [tokenizer.decode([idx.item()]) for idx in top_k_indices[0]]
+                    top_k_tokens = [
+                        tokenizer.decode([idx.item()]) for idx in top_k_indices[0]
+                    ]
                     print(f"Top {top_k} tokens: {top_k_tokens}")
 
-            
             # Stop if we predict the end token or reach max sequence length
-            if hasattr(tokenizer, 'use_pretrained') and tokenizer.use_pretrained:
+            if hasattr(tokenizer, "use_pretrained") and tokenizer.use_pretrained:
                 # For BERT tokenizer, check for [SEP] token
                 if (
                     next_token.item() == tokenizer.vocab["[SEP]"]
@@ -461,7 +481,7 @@ def generate_text(
                     or tokens.size(1) >= seq_length
                 ):
                     break
-                
+
             # Append to sequence
             tokens = torch.cat([tokens, next_token], dim=1)
 
@@ -508,7 +528,7 @@ def get_texts(text_names, max_chars_per_text=100000):
             if len(raw_text) > max_chars_per_text:
                 raw_text = raw_text[:max_chars_per_text]
             texts.append(raw_text)
-    return texts    
+    return texts
 
 
 def split_train_test(sequences, train_size=0.9):
